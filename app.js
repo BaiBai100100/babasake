@@ -5,6 +5,8 @@ import { SUIT_INFO, HEART_NOTE, PENALTY_PRESETS } from './odai.js';
 import { GENRES, PENALTY_CHOICES, PENALTY_CHOICES_HARD } from './kioku-data.js';
 import { CPU_BY_KEY, cpuLine } from './cpus.js';
 import { Room, BROKERS, waitForState } from './net.js';
+import { kiokuDrink, babaDrink, drinkKind } from './drink.js';
+import * as FX from './fx.js';
 /* global qrcode */
 
 const params = new URLSearchParams(location.search);
@@ -260,11 +262,33 @@ function afterStateChange(prev, s) {
   if (isKioku(s) && g?.notice && pg && (!pg.notice || pg.notice.n !== g.notice.n || pg.notice.kind !== g.notice.kind)) {
     if (g.notice.kind === 'paid' || g.notice.kind === 'kanpai') vibrate([120, 60, 120]);
   }
+  const drink = drinkOf(prev, s);
+  if (drink) FX.playDrink(drink);
   if (s.phase === 'play' && actorOf(s) === me.id && (!prev || actorOf(prev) !== me.id || prev.phase !== 'play')) vibrate([70, 40, 70]);
   document.title = s.phase === 'play' && actorOf(s) === me.id && !ui.local ? '● あなたの番｜NOMIKAI CARDS' : 'NOMIKAI CARDS';
   keepAwake(s.phase === 'play' || s.phase === 'over');
   scheduleCpu();
   if (BOT) scheduleBot();
+}
+
+// 飲むカードがめくられた瞬間（全員の画面で同じ判定）。再接続や読み込み直後（prev なし）は出さない
+function drinkOf(prev, s) {
+  const g = s?.game;
+  const pg = prev?.game;
+  if (!g || !pg || prev.created !== s.created || prev.round !== s.round) return null;
+  if (isKioku(s)) {
+    if (g.step !== 'card' || !g.card || (pg.step === 'card' && pg.n === g.n)) return null;
+    const c = K.currentCard(s);
+    return kiokuDrink(c, { pen: kPen(s), foot: GENRES[c.g]?.foot, pot: g.pot || 0 });
+  }
+  if (g.chaser && !pg.chaser) return { kind: 'multi', water: true, mult: 1 };
+  const pr = g.pair;
+  if (g.step === 'odai' && pr?.chosen && !(pg.step === 'odai' && pg.seq === g.seq)) {
+    return babaDrink(pr.chosen, L.odaiOf(pr.chosen, g), { double: pr.double });
+  }
+  // 負けた人の罰ゲームが「飲む」系に決まったとき
+  if (g.step === 'over' && pg.step === 'penalty' && g.penalty && drinkKind(g.penalty)) return { kind: drinkKind(g.penalty), water: false, mult: 1 };
+  return null;
 }
 
 let joinTimer = null;
@@ -999,6 +1023,7 @@ function viewSheet() {
     body = `<h2>メニュー</h2>
       <div class="menu-list">
         <button class="btn" data-act="rules">遊び方</button>
+        <button class="btn" data-act="sound" aria-pressed="${FX.fxState.sound}">効果音：${FX.fxState.sound ? 'オン' : 'オフ'}</button>
         ${s && inRoom() && !isHost() ? '<button class="btn" data-act="become-host">自分がホストになる</button>' : ''}
         ${s && isHost() && s.phase === 'play' ? '<button class="btn" data-act="lobby-confirm">ゲームを中断してロビーへ</button>' : ''}
         ${s?.game && isHost() && (s.game.rule || s.game.rules?.length) ? '<button class="btn" data-act="clear-rule">縛り・ルールを全部解除</button>' : ''}
@@ -1078,6 +1103,9 @@ app.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); }
 });
 
+// 音の解禁（iOS はタップの中でしか鳴らし始められない）。ほかの人がめくったときにも鳴るよう、最初のタップで済ませる
+document.addEventListener('pointerdown', () => { if (FX.fxState.sound) FX.unlockAudio(); }, { passive: true });
+
 app.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el || el.disabled) return;
@@ -1111,6 +1139,7 @@ function handle(act, d) {
     case 'forget-code': ui.code = ''; ui.broker = null; ui.screen = 'home'; history.replaceState(null, '', location.pathname); render(); break;
     case 'rules': ui.sheet = { type: 'rules', kind: ui.screen === 'setup' ? GAMES[ui.pick]?.kind : kindOf() }; render(); break;
     case 'menu': ui.sheet = { type: 'menu' }; render(); break;
+    case 'sound': FX.setSound(!FX.fxState.sound); render(); break;
     case 'close-sheet': ui.sheet = null; render(); break;
     case 'share': {
       const url = roomUrl();
@@ -1206,12 +1235,13 @@ window.render_game_to_text = () => {
     players: s?.players.map((p) => ({ id: p.id, name: p.name, cpu: p.cpu || null, n: g?.hands?.[p.id]?.length ?? null })) ?? [],
     v: s?.v ?? null, round: s?.round ?? 0, overlay: !!document.querySelector('.overlay'), settings: s?.settings ?? null,
     duo: g?.duo ?? null, hard: g?.hard ?? null,
+    fx: { count: FX.fxState.count, last: FX.fxState.last, sound: FX.fxState.sound },
   };
   if (isKioku(s) && g) Object.assign(base, { turn: g.turn, card: g.card, text: K.currentCard(s)?.t ?? null, remaining: K.remaining(s), n: g.n, rules: g.rules, committed: g.committed, pot: g.pot ?? 0, notice: g.notice ?? null, hit: K.isHitCard(K.currentCard(s)), toast: K.isToastCard(K.currentCard(s)) });
   else if (g) Object.assign(base, { turn: g.turn, target: L.drawTarget(s), myHand: g.hands[me.id] ?? null, finished: g.finished, loser: g.loser, penalty: g.penalty, pair: g.pair ? { by: g.pair.by, cards: g.pair.cards, chosen: g.pair.chosen, committed: g.pair.committed } : null });
   return JSON.stringify(base);
 };
-window.__bb = { ui, L, K, me, commit }; // commit はテストで山札を仕込むため
+window.__bb = { ui, L, K, me, commit, FX }; // commit はテストで山札を仕込むため
 
 // ---------- 起動 ----------
 render();

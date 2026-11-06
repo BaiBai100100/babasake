@@ -19,6 +19,8 @@
 | `kioku.js` / `kioku-data.js` | 記憶のルールとお題108枚＋泥酔カード12枚 |
 | `cpus.js` | CPUキャラ6人 |
 | `img/` | 生成画像（webp） |
+| `drink.js` | 飲む演出の判定（ひとり／みんな／お水。純粋関数） |
+| `fx.js` | 飲む演出の画面・効果音（Web Audio で合成）・振動 |
 | `net.js` | MQTT 通信 |
 | `vendor/` | mqtt.js・qrcode-generator（どちらもMIT） |
 
@@ -30,4 +32,6 @@ python3 -m http.server 8765 &            # 別ターミナル
 node test/e2e.mjs http://localhost:8765/   # 複数台で通し（ババ酒3人＋CPU、記憶2人＋泥酔）
 node test/smoke.mjs http://localhost:8765/ # 1台モードで全画面を撮影
 node test/toast.mjs http://localhost:8765/ # 貯金があるときの「全員で乾杯」
+node test/drink.mjs http://localhost:8765/ # 飲む演出（グラスひとつ／ふたつ・効果音オフ）
+node test/fx-preview.mjs http://localhost:8765/ # 飲む演出のコマ送り＋音つきプレビュー動画（ffmpeg）
 ```

@@ -446,6 +446,133 @@ input:focus { outline: none; box-shadow: 3px 3px 0 var(--pink); }
 .game.drunk .pl.turn { animation: wob 1.6s ease-in-out infinite; }
 @keyframes wob { 50% { transform: rotate(calc(var(--drunk) * 4deg)); } }
 
+/* ---------- 飲む演出（fx.js）：めくった瞬間に全員の画面で ---------- */
+#fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+.fx { position: absolute; inset: 0; --gw: min(40vw, 190px); }
+.fx-veil { position: absolute; inset: 0; background: rgba(247, 239, 227, 0.6); animation: fx-veil var(--dur) ease both; }
+.fx-solo { --dur: 2000ms; }
+.fx-multi { --dur: 1700ms; }
+@keyframes fx-veil { 0% { opacity: 0; } 8% { opacity: 1; } 86% { opacity: 1; } 100% { opacity: 0; } }
+.fx-rays {
+  position: absolute; left: 50%; top: 42%; width: 170vmax; height: 170vmax; margin: -85vmax 0 0 -85vmax;
+  background: repeating-conic-gradient(from 0deg, rgba(251, 62, 168, 0.32) 0deg 7deg, transparent 7deg 18deg, rgba(28, 60, 194, 0.24) 18deg 24deg, transparent 24deg 36deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0 8%, rgba(0, 0, 0, 0.7) 22%, transparent 48%);
+  mask-image: radial-gradient(circle, #000 0 8%, rgba(0, 0, 0, 0.7) 22%, transparent 48%);
+  animation: fx-rays var(--dur) cubic-bezier(.2, .7, .3, 1) both;
+}
+.fx.water .fx-rays { background: repeating-conic-gradient(from 0deg, rgba(28, 60, 194, 0.26) 0deg 7deg, transparent 7deg 18deg, rgba(214, 222, 251, 0.9) 18deg 24deg, transparent 24deg 36deg); }
+@keyframes fx-rays { 0% { transform: scale(0.2) rotate(0); opacity: 0; } 14% { transform: scale(1) rotate(8deg); opacity: 1; } 84% { opacity: 1; } 100% { transform: scale(1.15) rotate(46deg); opacity: 0; } }
+.fx-stage { position: absolute; left: 50%; top: 42%; width: 0; height: 0; }
+.fx-g { position: absolute; width: var(--gw); }
+.fx-g svg { display: block; width: 100%; height: auto; overflow: visible; }
+.fx-glass .liq, .fx-glass .foam, .fx-glass .bub { transform-box: fill-box; transform-origin: 50% 0; }
+.fx-glass.mirror { transform: scaleX(-1); animation: none; }
+.fx-glass .bub { animation: fx-bub 0.7s ease-in calc(var(--i) * 0.11s) infinite; }
+@keyframes fx-bub { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-46px); opacity: 0; } }
+
+/* ひとり：飛び出す → 傾けてゴクッゴクッ → ドンッと置いてプハーッ */
+.fx-solo .fx-g.one { width: calc(var(--gw) * 1.12); left: calc(var(--gw) * -0.62); top: calc(var(--gw) * -0.7); transform-origin: 50% 80%; animation: fx-solo-glass var(--dur) cubic-bezier(.3, .8, .3, 1) both; }
+@keyframes fx-solo-glass {
+  0% { transform: translateY(70vh) scale(0.4) rotate(14deg); }
+  14% { transform: translateY(-8%) scale(1.12) rotate(-6deg); }
+  21% { transform: translateY(0) scale(1) rotate(0); }
+  32% { transform: translateY(0) rotate(2deg); }
+  40% { transform: translate(-4%, -10%) rotate(-36deg); }
+  60% { transform: translate(-6%, -12%) rotate(-44deg); }
+  64% { transform: translate(0, 4%) rotate(6deg) scale(1.08); }
+  70% { transform: translate(0, 0) rotate(-2deg) scale(1); }
+  88% { transform: translate(0, 0) rotate(0) scale(1); opacity: 1; }
+  100% { transform: translate(0, -14%) scale(0.92); opacity: 0; }
+}
+.fx-solo .liq { animation: fx-drain var(--dur) ease-in both; }
+@keyframes fx-drain { 0%, 38% { transform: translateY(0); } 60% { transform: translateY(74%); } 100% { transform: translateY(78%); } }
+.fx-solo .foam { animation: fx-foam var(--dur) ease-in both; }
+@keyframes fx-foam { 0%, 40% { transform: none; opacity: 1; } 58% { transform: translateY(40%) scaleY(0.4); opacity: 0; } 100% { opacity: 0; } }
+
+/* みんな：左右から飛んできてカチン */
+.fx-multi .fx-g { top: calc(var(--gw) * -0.62); transform-origin: 50% 100%; }
+.fx-multi .fx-g.left { right: 2px; animation: fx-left var(--dur) cubic-bezier(.35, .1, .3, 1) both; }
+.fx-multi .fx-g.right { left: 2px; animation: fx-right var(--dur) cubic-bezier(.35, .1, .3, 1) both; }
+@keyframes fx-left {
+  0% { transform: translate(-90vw, 10%) rotate(-30deg); }
+  21% { transform: translate(-12%, 0) rotate(16deg); }
+  27% { transform: translate(-28%, 3%) rotate(3deg); }
+  36% { transform: translate(-20%, 0) rotate(10deg); }
+  86% { transform: translate(-20%, 0) rotate(10deg); opacity: 1; }
+  100% { transform: translate(-20%, -12%) rotate(10deg); opacity: 0; }
+}
+@keyframes fx-right {
+  0% { transform: translate(90vw, 10%) rotate(30deg); }
+  21% { transform: translate(12%, 0) rotate(-16deg); }
+  27% { transform: translate(28%, 3%) rotate(-3deg); }
+  36% { transform: translate(20%, 0) rotate(-10deg); }
+  86% { transform: translate(20%, 0) rotate(-10deg); opacity: 1; }
+  100% { transform: translate(20%, -12%) rotate(-10deg); opacity: 0; }
+}
+.fx-multi .liq { animation: fx-slosh 0.9s ease-out 0.36s both; }
+@keyframes fx-slosh { 0% { transform: translateY(0) rotate(0); } 20% { transform: translateY(-8%) rotate(-6deg); } 50% { transform: translateY(3%) rotate(4deg); } 100% { transform: none; } }
+.fx-flash {
+  position: absolute; left: 0; top: calc(var(--gw) * -0.5); width: 300px; height: 300px; margin: -150px 0 0 -150px;
+  background: radial-gradient(circle, #fff 0 18%, rgba(255, 211, 233, 0.95) 30%, rgba(251, 62, 168, 0) 62%);
+  clip-path: polygon(50% 0, 60% 34%, 96% 22%, 68% 50%, 100% 74%, 60% 64%, 50% 100%, 40% 64%, 4% 76%, 32% 50%, 0 24%, 40% 34%);
+  animation: fx-flash 0.42s ease-out 0.35s both;
+}
+@keyframes fx-flash { 0% { transform: scale(0) rotate(0); opacity: 1; } 40% { transform: scale(1.25) rotate(12deg); opacity: 1; } 100% { transform: scale(1.6) rotate(24deg); opacity: 0; } }
+
+/* 文字（スタンプ） */
+.fx-word {
+  position: absolute; white-space: nowrap; font-family: var(--display); color: var(--pink);
+  -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 4px 4px 0 var(--blue);
+  letter-spacing: 0.02em; line-height: 1;
+}
+.fx.water .fx-word { color: var(--paper-2); text-shadow: 4px 4px 0 var(--blue); }
+.fx-word.w1, .fx-word.w2 { font-size: 30px; opacity: 0; }
+.fx-word.w1 { left: calc(var(--gw) * -1.08); top: calc(var(--gw) * -0.5); animation: fx-gok 0.62s ease-out 0.72s both; --rot: -12deg; }
+.fx-word.w2 { left: calc(var(--gw) * 0.42); top: calc(var(--gw) * -0.86); animation: fx-gok 0.62s ease-out 1.0s both; --rot: 10deg; }
+@keyframes fx-gok { 0% { transform: scale(0) rotate(var(--rot)); opacity: 0; } 18% { transform: scale(1.35) rotate(var(--rot)); opacity: 1; } 30% { transform: scale(1) rotate(var(--rot)); } 70% { opacity: 1; } 100% { transform: translateY(-18px) scale(0.9) rotate(var(--rot)); opacity: 0; } }
+.fx-word.big-word { font-size: clamp(38px, 12vw, 58px); left: 0; top: calc(var(--gw) * 0.62); transform: translateX(-50%); opacity: 0; }
+.fx-solo .big-word { animation: fx-stamp 0.74s cubic-bezier(.2, 1.4, .4, 1) 1.26s both; }
+.fx-multi .big-word { animation: fx-stamp 1.3s cubic-bezier(.2, 1.4, .4, 1) 0.38s both; }
+@keyframes fx-stamp {
+  0% { transform: translateX(-50%) scale(2.8) rotate(-16deg); opacity: 0; }
+  14% { transform: translateX(-50%) scale(0.9) rotate(-5deg); opacity: 1; }
+  24% { transform: translateX(-50%) scale(1.06) rotate(-6deg); }
+  34% { transform: translateX(-50%) scale(1) rotate(-6deg); }
+  50% { transform: translateX(-50%) scale(1.04) rotate(-4deg); }
+  80% { opacity: 1; }
+  100% { transform: translateX(-50%) scale(1) rotate(-6deg) translateY(-8px); opacity: 0; }
+}
+.fx-mult {
+  position: absolute; left: calc(var(--gw) * 0.42); top: calc(var(--gw) * -1.02); font-family: var(--display); font-weight: 400; font-size: 34px;
+  color: var(--paper-2); background: var(--pink); border: 3px solid var(--ink); border-radius: 999px; padding: 4px 14px 6px;
+  box-shadow: 4px 4px 0 var(--ink); opacity: 0;
+}
+.fx-solo .fx-mult { animation: fx-badge 0.7s cubic-bezier(.2, 1.6, .4, 1) 1.32s both; }
+.fx-multi .fx-mult { animation: fx-badge 1.2s cubic-bezier(.2, 1.6, .4, 1) 0.46s both; }
+@keyframes fx-badge { 0% { transform: scale(0) rotate(-30deg); opacity: 0; } 20% { transform: scale(1.3) rotate(8deg); opacity: 1; } 34% { transform: scale(1) rotate(6deg); } 80% { opacity: 1; } 100% { transform: scale(1) rotate(6deg); opacity: 0; } }
+
+/* しずく・紙吹雪 */
+.fx-burst { position: absolute; left: 0; top: calc(var(--gw) * -0.72); width: 0; height: 0; }
+.fx-multi .fx-burst { top: calc(var(--gw) * -0.5); }
+.fx-p { position: absolute; left: 0; top: 0; width: 12px; height: 12px; background: var(--c); border: 2px solid var(--ink); opacity: 0; animation: fx-fly 0.95s cubic-bezier(.12, .75, .35, 1) both; }
+.fx-solo .fx-p { animation-delay: calc(1260ms + var(--dl)); }
+.fx-multi .fx-p { animation-delay: calc(360ms + var(--dl)); }
+.fx-p.drop { border-radius: 0 50% 50% 50%; }
+.fx-p.conf { width: 8px; height: 16px; border-radius: 2px; }
+.fx-p.dot { width: 10px; height: 10px; border-radius: 50%; }
+@keyframes fx-fly {
+  0% { transform: translate(-50%, -50%) scale(0.2) rotate(0); opacity: 1; }
+  60% { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(var(--s)) rotate(calc(var(--r) * 0.6)); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--x) * 1.15), calc(-50% + var(--y) + 170px)) scale(var(--s)) rotate(var(--r)); opacity: 0; }
+}
+.fx.big .fx-rays { animation-duration: calc(var(--dur) + 200ms); }
+
+/* 画面ゆれ（main.game は全画面ぴったりなので、動かしても中の固定表示はずれない） */
+body.fx-shake .game { animation: fx-shake 0.38s linear; }
+body.fx-shake-strong .game { animation: fx-shake-strong 0.42s linear; }
+@keyframes fx-shake { 0%, 100% { transform: none; } 20% { transform: translate(-5px, 2px); } 40% { transform: translate(5px, -2px); } 60% { transform: translate(-3px, 1px); } 80% { transform: translate(2px, 0); } }
+@keyframes fx-shake-strong { 0%, 100% { transform: none; } 15% { transform: translate(-9px, 3px) rotate(-0.6deg); } 30% { transform: translate(8px, -4px) rotate(0.5deg); } 50% { transform: translate(-6px, 2px) rotate(-0.3deg); } 70% { transform: translate(4px, -1px); } 85% { transform: translate(-2px, 0); } }
+
 @media (min-width: 700px) {
   .card.s { --cw: 60px; }
   .card.m { --cw: 84px; }

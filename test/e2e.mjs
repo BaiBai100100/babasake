@@ -197,6 +197,8 @@ if (!process.env.ONLY_B) {
   const fin = await Promise.all(pages.map(st));
   await shot(host, 'B4-late');
   console.log('B 2台の状態が一致:', fin[0].v === fin[1].v && fin[0].n === fin[1].n, '引いた枚数:', fin[0].n, '2人用の文面:', checks.duoText, 'タイマー共有:', checks.timer, 'チェイサー:', checks.water, 'だれもいない共有:', checks.none);
+  // 飲む演出は、めくった人だけでなく相手のスマホにも出る（取りこぼし1回までは許す）
+  console.log('B 飲む演出の回数（2台）:', fin.map((x) => x.fx.count).join(' / '), '両方で出た:', fin.every((x) => x.fx.count > 0) && Math.abs(fin[0].fx.count - fin[1].fx.count) <= 1);
 }
 
 console.log('コンソールエラー:', errors.length ? errors : 'なし');
