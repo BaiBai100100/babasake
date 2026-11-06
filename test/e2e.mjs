@@ -1,184 +1,192 @@
-// 4台のスマホを模した別々のブラウザで、実際の画面操作だけで1ゲーム最後まで遊ぶ
+// 複数台のスマホを模した別々のブラウザで、実際の画面操作だけで遊ぶ
 // 使い方: node test/e2e.mjs [URL]
+//  シナリオA：ババ酒 人間3人＋CPU1人（公開中継サーバー経由）
+//  シナリオB：記憶 第2弾 2人モード＋ゴリゴリ泥酔モード
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
 const BASE = process.argv[2] || 'http://localhost:8765/';
-const OUT = new URL('../shots/', import.meta.url).pathname;
+const OUT = new URL('../shots/e2e/', import.meta.url).pathname;
 fs.mkdirSync(OUT, { recursive: true });
-const NAMES = ['はる', 'あお', 'みさき', 'けん'];
-
 const browser = await chromium.launch({ channel: 'chromium' });
 const errors = [];
-const pages = [];
-async function open(url, i) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 750 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, locale: 'ja-JP' });
-  const page = await ctx.newPage();
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(`[${NAMES[i]}] ${m.text()}`); });
-  page.on('pageerror', (e) => errors.push(`[${NAMES[i]}] ${e.message}`));
-  await page.goto(url);
-  return page;
-}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const st = async (p) => JSON.parse(await p.evaluate(() => window.render_game_to_text()));
 const shot = async (p, name) => { await p.screenshot({ path: OUT + name + '.png' }); console.log('shot', name); };
-async function waitAll(pred, label, ms = 20000) {
+
+async function open(url, label) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, locale: 'ja-JP' });
+  const page = await ctx.newPage();
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(`[${label}] ${m.text()}`); });
+  page.on('pageerror', (e) => errors.push(`[${label}] ${e.message}`));
+  await page.goto(url);
+  await page.waitForTimeout(600);
+  return page;
+}
+async function waitAll(pages, pred, label, ms = 25000) {
   const t0 = Date.now();
   while (Date.now() - t0 < ms) {
     const ss = await Promise.all(pages.map(st));
     if (ss.every(pred)) return ss;
-    await new Promise((r) => setTimeout(r, 200));
+    await sleep(200);
   }
   const ss = await Promise.all(pages.map(st));
   throw new Error(`timeout: ${label}\n` + ss.map((s) => JSON.stringify({ n: s.name, phase: s.phase, step: s.step, v: s.v, players: s.players.length })).join('\n'));
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// 1. ホスト：部屋を作る
-const host = await open(BASE, 0);
-pages.push(host);
-await host.waitForTimeout(800);
-await shot(host, '01-home');
-await host.fill('#in-name', NAMES[0]);
-await host.click('[data-act="create"]');
-await host.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'lobby', null, { timeout: 20000 });
-const h0 = await st(host);
-console.log('room', h0.code, 'broker', h0.broker);
-
-// 2. 3人がリンクから参加（1人は手入力のコードで参加）
-for (let i = 1; i < 4; i++) {
-  if (i === 3) {
-    const p = await open(BASE, i);
-    pages.push(p);
-    await p.fill('#in-name', NAMES[i]);
-    await p.fill('#in-code', h0.code);
-    await p.click('[data-act="join"]');
-  } else {
-    pages.push(await open(`${BASE}?r=${h0.code}&b=${h0.broker}&name=${encodeURIComponent(NAMES[i])}&autojoin=1`, i));
-  }
+async function createVia(page, gameKey, name) {
+  await page.click(`[data-g="${gameKey}"]`);
+  await page.fill('#in-name', name);
+  await page.click('[data-act="create"]');
+  await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'lobby', null, { timeout: 25000 });
+  return st(page);
 }
-await waitAll((s) => s.phase === 'lobby' && s.players.length === 4, '4人そろう', 30000);
-await host.waitForTimeout(400);
-await shot(host, '02-lobby-host');
-await shot(pages[1], '03-lobby-guest');
 
-// 席の並べ替え（ホスト）：3番目を上へ
-const before = (await st(host)).players.map((p) => p.name);
-await host.click('[data-act="move"][data-d="-1"] >> nth=2');
-await waitAll((s) => s.players[1]?.name === before[2] && s.players[2]?.name === before[1], '並べ替え反映');
-console.log('並べ替え: OK', before.join('→'), '⇒', (await st(pages[3])).players.map((p) => p.name).join('→'));
+if (!process.env.ONLY_B) {
+// ================= シナリオA：ババ酒 3人＋CPU =================
+{
+  const names = ['はる', 'あお', 'みさき'];
+  const host = await open(BASE, names[0]);
+  const h0 = await createVia(host, 'baba', names[0]);
+  console.log('A room', h0.code, 'broker', h0.broker);
+  const pages = [host];
+  pages.push(await open(`${BASE}?r=${h0.code}&b=${h0.broker}&name=${encodeURIComponent(names[1])}&autojoin=1`, names[1]));
+  // 3人目はホームのコード入力から
+  const p3 = await open(BASE, names[2]);
+  await p3.evaluate((n) => localStorage.setItem('babasake:name', n), names[2]);
+  await p3.reload();
+  await p3.waitForTimeout(500);
+  await p3.fill('#in-code', h0.code);
+  await p3.click('[data-act="join-code"]');
+  pages.push(p3);
+  await waitAll(pages, (s) => s.phase === 'lobby' && s.players.length === 3, '3人そろう');
+  await host.click('[data-act="add-cpu"]');
+  await waitAll(pages, (s) => s.players.length === 4 && s.players.some((p) => p.cpu), 'CPU参加');
+  await sleep(400);
+  await shot(host, 'A1-lobby-host');
+  await shot(pages[1], 'A2-lobby-guest');
+  await host.click('[data-act="start"]');
+  await waitAll(pages, (s) => s.phase === 'play', 'ゲーム開始');
+  const ids = (await Promise.all(pages.map(st))).map((x) => x.me);
+  const P = (pid) => pages[ids.indexOf(pid)];
 
-// 3. スタート
-await host.click('[data-act="start"]');
-await waitAll((s) => s.phase === 'play', 'ゲーム開始');
-await sleep(500);
-
-// 4. 引く人がカードを選ぶ → 相手の画面でも光るか
-let s = await st(host);
-const pageOf = (pid) => pages[(s.players.findIndex((p) => p.id === pid) >= 0) ? pagesIds.indexOf(pid) : -1];
-const pagesIds = (await Promise.all(pages.map(st))).map((x) => x.me);
-const P = (pid) => pages[pagesIds.indexOf(pid)];
-const drawer = P(s.turn);
-const target = P(s.target);
-const other = pages.find((p) => p !== drawer && p !== target);
-
-// 引かれる側がカードを1枚浮かせる
-await target.click('.hand-row .card >> nth=0');
-await target.click('[data-act="raise"]');
-await sleep(1200);
-const raisedOnDrawer = await drawer.locator('.fan .card.raised').count();
-console.log('浮かせたカードが引く人の画面に見える:', raisedOnDrawer === 1);
-
-await drawer.click('.fan .card >> nth=1');
-await sleep(1200);
-const hoverOnTarget = await target.locator('.fan .card.sel').count();
-const hoverOnOther = await other.locator('.fan .card.sel').count();
-console.log('選んだカードが相手の画面で光る:', hoverOnTarget === 1, '／他の人の画面でも:', hoverOnOther === 1);
-await shot(drawer, '04-draw-drawer');
-await shot(target, '05-draw-target');
-await shot(other, '06-draw-other');
-
-// 小さい画面でも「引く」ボタンが画面内に収まるか
-for (const [w, hgt] of [[375, 560], [430, 830]]) {
-  await drawer.setViewportSize({ width: w, height: hgt });
-  await sleep(300);
-  await drawer.click('.fan .card >> nth=0');
-  const fit = await drawer.evaluate(() => {
-    const b = document.querySelector('[data-act="draw"]').getBoundingClientRect();
-    return { bottom: Math.round(b.bottom), inner: innerHeight, overflowX: document.documentElement.scrollWidth > innerWidth };
-  });
-  console.log(`${w}x${hgt}: 引くボタン下端 ${fit.bottom} / 画面 ${fit.inner}`, fit.bottom <= fit.inner ? 'OK' : 'はみ出し', fit.overflowX ? '横はみ出しあり' : '横OK');
-  await shot(drawer, `04b-draw-${w}x${hgt}`);
-}
-await drawer.setViewportSize({ width: 390, height: 750 });
-
-// 5. 実際の画面操作だけで最後まで進める
-const seen = new Set();
-let guard = 0;
-let reloaded = false;
-while (true) {
-  if (++guard > 900) throw new Error('終わらない');
-  s = await st(host);
-  if (s.phase === 'over') break;
-  const p = P(s.actor);
-  const ps = await st(p);
-  if (ps.v !== s.v || ps.step !== s.step) { await sleep(150); continue; }
-  try {
-    if (s.step === 'draw') {
-      await p.click('.fan .card[data-act="pick-draw"] >> nth=0', { timeout: 3000 });
-      await p.click('[data-act="draw"]', { timeout: 3000 });
-    } else if (s.step === 'choose') {
-      if (!seen.has('choose')) { seen.add('choose'); await sleep(700); await shot(p, '07-choose-actor'); await shot(P(s.players.find((x) => x.id !== s.actor).id), '08-choose-watcher'); }
-      await p.click('.bigcard.tappable >> nth=0', { timeout: 3000 });
-    } else if (s.step === 'odai') {
-      if (await p.locator('[data-act="pick"]').count()) {
-        const need = await p.evaluate(() => window.__bb.L.needCount(window.__bb.ui.state.game.pair.chosen));
-        for (let k = 0; k < need; k++) await p.click(`[data-act="pick"] >> nth=${k}`);
-        if (!seen.has('pick')) { seen.add('pick'); await shot(p, '09-odai-pick'); }
-        await p.click('[data-act="commit"]');
-      } else if (await p.locator('#in-rule').count()) {
-        await p.fill('#in-rule', '敬語禁止');
-        if (!seen.has('rule')) { seen.add('rule'); await shot(p, '10-odai-rule'); }
-        await p.click('[data-act="commit"]');
-      } else if (await p.locator('[data-act="commit"]').count()) {
-        await p.click('[data-act="commit"]');
-      } else {
-        if (!seen.has('odai')) { seen.add('odai'); await sleep(700); await shot(p, '11-odai'); }
-        await p.click('[data-act="finish"]', { timeout: 3000 });
-      }
-    } else if (s.step === 'penalty') {
-      await sleep(900);
-      await shot(p, '12-penalty-actor');
-      await p.click('[data-act="preset"] >> nth=0');
-      await p.click('[data-act="penalty"]');
+  let checkedHover = false;
+  const seen = new Set();
+  let guard = 0;
+  let cpuTurns = 0;
+  let reloaded = false;
+  while (true) {
+    if (++guard > 1500) throw new Error('A 終わらない');
+    const s = await st(host);
+    if (s.phase === 'over') break;
+    const actorIsCpu = s.players.find((p) => p.id === s.actor)?.cpu;
+    let p = P(s.actor);
+    if (actorIsCpu) {
+      // CPUの番：人がやるステップならだれか（2人目）が押す
+      const g = await st(pages[1]);
+      if (g.iAct && g.step === 'odai') p = pages[1];
+      else { cpuTurns++; await sleep(300); continue; }
     }
-  } catch (e) {
-    await sleep(300);
+    const ps = await st(p);
+    if (ps.v !== s.v || ps.step !== s.step) { await sleep(150); continue; }
+    try {
+      if (s.step === 'draw') {
+        if (!checkedHover) {
+          const target = P(s.target);
+          const other = pages.find((x) => x !== p && x !== target);
+          await p.click('.fan .card[data-act="pick-draw"] >> nth=1');
+          await sleep(1200);
+          const onOther = other ? await other.locator('.fan .card.sel').count() : 1;
+          console.log('A 選んだカードがほかの人の画面で光る:', onOther === 1);
+          await shot(p, 'A3-draw-drawer');
+          if (other) await shot(other, 'A4-draw-watcher');
+          checkedHover = true;
+        } else {
+          await p.click('.fan .card[data-act="pick-draw"] >> nth=0', { timeout: 3000 });
+        }
+        await p.click('[data-act="draw"]', { timeout: 3000 });
+      } else if (s.step === 'choose') {
+        if (!seen.has('choose')) { seen.add('choose'); await sleep(700); await shot(p, 'A5-choose'); }
+        await p.click('.bigcard.tappable >> nth=0', { timeout: 3000 });
+      } else if (s.step === 'odai') {
+        if (await p.locator('[data-act="pick"]').count()) {
+          const need = await p.evaluate(() => window.__bb.L.needCount(window.__bb.ui.state.game.pair.chosen));
+          for (let k = 0; k < need; k++) await p.click(`[data-act="pick"] >> nth=${k}`);
+          await p.click('[data-act="commit"]');
+        } else if (await p.locator('#in-rule').count()) {
+          await p.fill('#in-rule', '敬語禁止');
+          await p.click('[data-act="commit"]');
+        } else if (await p.locator('[data-act="commit"]').count()) {
+          await p.click('[data-act="commit"]');
+        } else {
+          const key = actorIsCpu ? 'odai-cpu' : 'odai';
+          if (!seen.has(key)) { seen.add(key); await sleep(700); await shot(p, actorIsCpu ? 'A7-odai-cpu-pressed-by-human' : 'A6-odai'); }
+          await p.click('[data-act="finish"]', { timeout: 3000 });
+        }
+      } else if (s.step === 'penalty') {
+        await sleep(800);
+        await shot(p, 'A8-penalty');
+        await p.click('[data-act="preset"] >> nth=0');
+        await p.click('[data-act="penalty"]');
+      }
+    } catch { await sleep(300); }
+    if (!reloaded && s.step === 'draw' && guard > 15) {
+      reloaded = true;
+      await pages[2].reload();
+      await pages[2].waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'play', null, { timeout: 20000 });
+      console.log('A 再読み込みから復帰: OK');
+    }
+    await sleep(200);
   }
-  // 途中で1人がページを再読み込みしても復帰できるか
-  if (!reloaded && s.step === 'draw' && guard > 12) {
-    reloaded = true;
-    const victim = pages[2];
-    await victim.reload();
-    await victim.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'play', null, { timeout: 20000 });
-    console.log('再読み込みから復帰: OK');
-  }
-  await sleep(250);
+  const fin = await waitAll(pages, (x) => x.phase === 'over', 'A 全員に結果');
+  await sleep(1000);
+  await shot(host, 'A9-over');
+  console.log('A 全員同じ結果:', fin.every((f) => f.loser === fin[0].loser && f.v === fin[0].v), '負け:', fin[0].players.find((x) => x.id === fin[0].loser)?.name, 'CPUの番を待った回数:', cpuTurns, '見た場面:', [...seen].join(','));
+  for (const p of pages) await p.context().close();
 }
-const finals = await waitAll((x) => x.phase === 'over', '全員に結果が出る');
-await sleep(1000);
-await shot(host, '13-over-host');
-await shot(pages[1], '14-over-guest');
-const loser = finals[0].loser;
-console.log('全員同じ結果:', finals.every((f) => f.loser === loser && f.v === finals[0].v), '負け:', finals[0].players.find((x) => x.id === loser)?.name, '罰:', finals[0].penalty);
-const loserHand = await host.evaluate((id) => window.__bb.ui.state.game.hands[id], loser);
-console.log('負けた人の手札:', loserHand);
+}
 
-// 6. もう一回
-await host.click('[data-act="again"]');
-await waitAll((x) => x.phase === 'play' && x.round === 2, '2戦目開始');
-console.log('2戦目開始: OK');
-await shot(pages[3], '15-round2');
+// ================= シナリオB：記憶 第2弾 2人＋泥酔 =================
+{
+  const host = await open(BASE, 'B-はる');
+  const h0 = await createVia(host, 'kioku2', 'はる');
+  const guest = await open(`${BASE}?r=${h0.code}&b=${h0.broker}&name=${encodeURIComponent('あお')}&autojoin=1`, 'B-あお');
+  const pages = [host, guest];
+  await waitAll(pages, (s) => s.phase === 'lobby' && s.players.length === 2, 'B 2人');
+  await host.click('[data-act="toggle-hard"]');
+  await waitAll(pages, (s) => s.settings?.hard === true, 'B 泥酔ON反映');
+  await sleep(3200);
+  await shot(guest, 'B1-lobby-guest');
+  await host.click('[data-act="start"]');
+  const s0 = await waitAll(pages, (s) => s.phase === 'play', 'B 開始');
+  console.log('B 2人モード:', s0[0].duo, '泥酔:', s0[0].hard, '山札:', s0[0].remaining);
+  const ids = s0.map((x) => x.me);
+  const checks = { duoText: false, timer: false, water: false };
+  for (let i = 0; i < 30; i++) {
+    // 2台の状態がそろうまで待ってから読む
+    for (let t = 0; t < 40; t++) { const [a, b] = await Promise.all(pages.map(st)); if (a.v === b.v) break; await sleep(200); }
+    let s = await st(host);
+    const p = pages[ids.indexOf(s.turn)];
+    if (s.step === 'draw') { await p.click('[data-act="kdraw"]'); await sleep(700); s = await st(host); }
+    if (s.step === 'card') {
+      if (/相手|2人/.test(s.text)) checks.duoText = true;
+      if (s.card === 'KW') { checks.water = true; await shot(p, 'B3-water'); }
+      if (i === 2) { await sleep(500); await shot(p, 'B2-card-drawer'); await shot(pages.find((x) => x !== p), 'B2-card-other'); }
+      if (await p.locator('[data-act="ktimer"]').count() && !checks.timer) {
+        await p.click('[data-act="ktimer"]');
+        await sleep(1500);
+        const other = pages.find((x) => x !== p);
+        checks.timer = (await other.locator('.timer-num').count()) === 1;
+      }
+      if (await p.locator('#in-rule').count()) { await p.fill('#in-rule', '左手で飲む'); await p.click('[data-act="kcommit"]'); }
+      await p.click('[data-act="knext"]', { timeout: 4000 });
+      await sleep(300);
+    }
+  }
+  await sleep(800);
+  const fin = await Promise.all(pages.map(st));
+  await shot(host, 'B4-late');
+  console.log('B 2台の状態が一致:', fin[0].v === fin[1].v && fin[0].n === fin[1].n, '引いた枚数:', fin[0].n, '2人用の文面:', checks.duoText, 'タイマー共有:', checks.timer, 'チェイサー:', checks.water);
+}
 
-console.log('見た場面:', [...seen].join(','));
 console.log('コンソールエラー:', errors.length ? errors : 'なし');
 await browser.close();

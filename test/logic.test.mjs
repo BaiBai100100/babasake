@@ -49,15 +49,48 @@ test('最初のペアは捨てられ、手札に同じ数字は残らない', ()
   assert.ok(s.game.turn);
 });
 
-test('3人未満では始められない', () => {
-  assert.throws(() => L.startGame(lobby(2)), /3人以上/);
+test('1人では始められない（2人からOK）', () => {
+  assert.throws(() => L.startGame(lobby(1)), /2人以上/);
+  assert.equal(L.startGame(lobby(2), mulberry32(5)).game.duo, true);
+});
+
+test('2人モード：お題が2人用の文面になり、指名は自動で相手に決まる', () => {
+  let s = fixedHands(2, { p0: ['S5'], p1: ['H6', 'JK'] });
+  s.game.duo = true;
+  assert.equal(L.odaiOf('D1', s.game).t, '相手が一口飲む。');
+  assert.equal(L.odaiOf('C2', s.game).fx, null, 'リバースは2人では無効');
+  s = forcePair(s, 'p0', 'D1');
+  s = L.finishOdai(s, 'p0');
+  assert.equal(s.game.step, 'draw');
+});
+
+test('泥酔モード：一口が二口になり、縛りは3つまで重なる', () => {
+  let s = fixedHands(3, { p0: ['S5'], p1: ['H6', 'JK'], p2: ['S9'] });
+  s.game.hard = true;
+  assert.match(L.odaiOf('D1', s.game).t, /二口/);
+  for (const id of ['S2', 'S4', 'S6', 'S8']) s = L.commitOdai(forcePair(s, 'p0', id), 'p0');
+  assert.equal(s.game.rules.length, 3);
+  assert.equal(s.game.rules[2].text, 'グラスは利き手と逆の手');
+});
+
+test('CPUを呼ぶ：順番にキャラが来て、CPU入りでも最後まで遊べる', () => {
+  let s = lobby(1);
+  s = L.addCpu(s);
+  s = L.addCpu(s);
+  assert.deepEqual(s.players.map((p) => p.cpu || null), [null, 'zaruko', 'senpai']);
+  const rng = mulberry32(42);
+  s = L.startGame(s, rng);
+  let guard = 0;
+  while (s.phase === 'play') { s = L.applyAction(s, L.autoAction(s, rng), rng); if (++guard > 3000) assert.fail('終わらない'); }
+  assert.equal(s.phase, 'over');
 });
 
 test('ランダムに1000ゲーム最後まで回しても破綻しない', () => {
   for (let seed = 1; seed <= 1000; seed++) {
     const rng = mulberry32(seed);
-    const n = 3 + (seed % 8);
-    let s = L.startGame(lobby(n), rng);
+    const n = 2 + (seed % 9);
+    const hard = seed % 3 === 0;
+    let s = L.startGame(L.setSettings(lobby(n), { hard }), rng);
     let steps = 0;
     const effects = new Set();
     while (s.phase === 'play') {

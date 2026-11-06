@@ -81,8 +81,8 @@ export class Room {
     this.client?.publish(this.topic('live'), JSON.stringify({ ...data, from: this.me.id }), { qos: 0 });
   }
 
-  publishRaise(card) {
-    this.client?.publish(this.topic(`raise/${this.me.id}`), JSON.stringify({ card: card || null }), { qos: 1, retain: true });
+  publishRaise(card, pid = this.me.id) {
+    this.client?.publish(this.topic(`raise/${pid}`), JSON.stringify({ card: card || null }), { qos: 1, retain: true });
   }
 
   // 接続が切れていたら作り直す（スマホのスリープ復帰用）

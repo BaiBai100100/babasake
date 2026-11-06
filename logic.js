@@ -1,9 +1,10 @@
 // ゲームの状態遷移（純粋関数）。ブラウザでも Node でも動く。
-import { ODAI } from './odai.js';
+import { ODAI, hardText } from './odai.js';
+import { CPUS } from './cpus.js';
 
 export const SUITS = ['S', 'H', 'D', 'C'];
 export const DECK = [...SUITS.flatMap((s) => Array.from({ length: 13 }, (_, i) => s + (i + 1))), 'JK'];
-export const MIN_PLAYERS = 3;
+export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 10;
 
 export const rankOf = (id) => (id === 'JK' ? 0 : parseInt(id.slice(1), 10));
@@ -26,8 +27,15 @@ export function shuffle(arr, rng = Math.random) {
 export const nameOf = (s, pid) => s.players.find((p) => p.id === pid)?.name ?? '？';
 
 // ---------- ロビー ----------
-export function makeRoomState(code, host, now = Date.now()) {
-  return { v: 1, ts: now, by: host.id, room: code, hostId: host.id, phase: 'lobby', players: [{ id: host.id, name: host.name }], game: null, round: 0 };
+export function makeRoomState(code, host, now = Date.now(), kind = 'baba', settings = {}) {
+  return { v: 1, ts: now, by: host.id, room: code, kind, settings, hostId: host.id, phase: 'lobby', players: [{ id: host.id, name: host.name }], game: null, round: 0 };
+}
+
+export function setSettings(s0, patch) {
+  const s = clone(s0);
+  if (s.phase !== 'lobby') fail('設定はロビーで変えられます');
+  s.settings = { ...(s.settings || {}), ...patch };
+  return s;
 }
 
 export function addPlayer(s0, p) {
@@ -55,6 +63,29 @@ export function movePlayer(s0, pid, delta) {
   if (i < 0 || j < 0 || j >= s.players.length) return s;
   [s.players[i], s.players[j]] = [s.players[j], s.players[i]];
   return s;
+}
+
+// CPUを1人呼ぶ（まだ来ていないキャラから順に）
+export function addCpu(s0) {
+  const s = clone(s0);
+  if (s.phase !== 'lobby') fail('CPUはロビーで呼べます');
+  if (s.players.length >= MAX_PLAYERS) fail(`参加できるのは${MAX_PLAYERS}人までです`);
+  const used = new Set(s.players.filter((p) => p.cpu).map((p) => p.cpu));
+  const c = CPUS.find((x) => !used.has(x.key));
+  if (!c) fail('CPUはこれ以上呼べません');
+  s.players.push({ id: `cpu-${c.key}`, name: c.name, cpu: c.key });
+  return s;
+}
+export const isCpu = (s, pid) => !!s.players.find((p) => p.id === pid)?.cpu;
+
+// 2人モード・泥酔モードを反映したお題
+export function odaiOf(id, g) {
+  const d = ODAI[id];
+  if (!d) return null;
+  let t = (g?.duo && d.t2) || d.t;
+  if (g?.hard) t = hardText(t);
+  const fx = g?.duo && 'fx2' in d ? d.fx2 : d.fx;
+  return { ...d, t, fx };
 }
 
 export function makeHost(s0, pid) {
@@ -194,7 +225,8 @@ export function startGame(s0, rng = Math.random) {
   s.round = (s.round || 0) + 1;
   s.game = {
     hands, dir: 1, turn: null, step: 'draw', pair: null, finished: [], loser: null,
-    skip: 0, double: false, rule: null, penalty: null, log: [], seq: 0, lastDraw: null, pairs: 0,
+    skip: 0, double: false, rule: null, rules: [], penalty: null, log: [], seq: 0, lastDraw: null, pairs: 0,
+    duo: s.players.length === 2, hard: !!s.settings?.hard, chaser: false,
   };
   log(s, `第${s.round}戦スタート。最初のペアは捨てた（お題なし）`);
   finishCheck(s, s.players.map((p) => p.id));
@@ -215,6 +247,7 @@ export function draw(s0, pid, index, rng = Math.random) {
   const idx = Math.max(0, Math.min(fromHand.length - 1, index | 0));
   const card = fromHand.splice(idx, 1)[0];
   g.seq++;
+  g.chaser = false;
   const mine = g.hands[pid];
   const m = card === 'JK' ? -1 : mine.findIndex((c) => c !== 'JK' && rankOf(c) === rankOf(card));
   if (m >= 0) {
@@ -259,7 +292,7 @@ export function choose(s0, pid, cardId) {
   g.pair.chosen = cardId;
   g.pair.double = g.double;
   g.double = false;
-  const def = ODAI[cardId];
+  const def = odaiOf(cardId, g);
   const auto = computeTargets(s, def.fx, pid);
   if (auto) g.pair.picks = auto;
   g.step = 'odai';
@@ -270,7 +303,7 @@ export function choose(s0, pid, cardId) {
 // 指名などの入力が要るお題で、候補になる人
 export function pickCandidates(s, pid) {
   const g = s.game;
-  const def = ODAI[g.pair?.chosen] || {};
+  const def = odaiOf(g.pair?.chosen, g) || {};
   if (def.fx === 'swap' || def.fx === 'peek') {
     if ((def.fx === 'swap') && !isActive(g, pid)) return [];
     return activePlayers(s).filter((id) => id !== pid);
@@ -281,6 +314,13 @@ export function pickCandidates(s, pid) {
 export function needCount(cardId) {
   const need = ODAI[cardId]?.need;
   return typeof need === 'number' ? need : 0;
+}
+
+// CPUが持ち主のとき「浮かせる」カードを選ぶ（たまにJOKERを浮かせてゆさぶる）
+export function cpuRaise(hand, rng = Math.random) {
+  if (!hand.length || rng() < 0.45) return null;
+  if (hand.includes('JK') && rng() < 0.5) return 'JK';
+  return hand[Math.floor(rng() * hand.length)];
 }
 
 function randomTake(hand, rng) {
@@ -298,12 +338,14 @@ export function commitOdai(s0, pid, input = {}, rng = Math.random) {
   if (pr.by !== pid) fail('お題を進めるのはペアを作った人です');
   if (pr.committed) return s;
   const id = pr.chosen;
-  const def = ODAI[id];
+  const def = odaiOf(id, g);
   const times = pr.double ? 2 : 1;
   const need = def.need;
   if (typeof need === 'number' && need > 0) {
     const cands = pickCandidates(s, pid);
-    const picks = (input.picks || []).filter((x) => cands.includes(x));
+    // 選ぶ余地がない（2人モードなど）ときは自動で決まる
+    const raw = input.picks?.length ? input.picks : (cands.length <= need ? cands : []);
+    const picks = raw.filter((x) => cands.includes(x));
     const uniq = [...new Set(picks)];
     const required = Math.min(need, cands.length);
     if (uniq.length !== required) fail(required ? `${required}人を選んでください` : '対象がいません');
@@ -330,11 +372,13 @@ export function commitOdai(s0, pid, input = {}, rng = Math.random) {
       break;
     case 'rule':
       g.rule = { text: def.rule, by: pid };
-      pr.result = `縛り「${def.rule}」スタート`;
+      g.rules = [...(g.hard ? g.rules || [] : []), g.rule].slice(-3);
+      pr.result = g.hard && g.rules.length > 1 ? `縛り「${def.rule}」追加（いま${g.rules.length}つ）` : `縛り「${def.rule}」スタート`;
       break;
     case 'rulecustom':
       g.rule = { text: pr.text, by: pid };
-      pr.result = `縛り「${pr.text}」スタート`;
+      g.rules = [...(g.hard ? g.rules || [] : []), g.rule].slice(-3);
+      pr.result = g.hard && g.rules.length > 1 ? `縛り「${pr.text}」追加（いま${g.rules.length}つ）` : `縛り「${pr.text}」スタート`;
       break;
     case 'swap': {
       const b = pr.picks[0];
@@ -388,6 +432,8 @@ export function finishOdai(s0, pid, rng = Math.random) {
   if (g.pair.by !== pid) fail('お題を進めるのはペアを作った人です');
   const by = g.pair.by;
   g.pair = null;
+  // 泥酔モードは8ペアごとにチェイサータイム
+  if (g.hard && g.pairs % 8 === 0) { g.chaser = true; log(s, 'チェイサータイム：全員お水を一口'); }
   afterTurn(s, by);
   return s;
 }
@@ -419,7 +465,7 @@ export function autoAction(s, rng = Math.random) {
   if (g.step === 'odai') {
     if (!g.pair.committed) {
       const id = g.pair.chosen;
-      const need = ODAI[id].need;
+      const need = odaiOf(id, g).need;
       const input = {};
       if (typeof need === 'number' && need > 0) input.picks = shuffle(pickCandidates(s, actor), rng).slice(0, need);
       if (need === 'text') input.text = 'テストの縛り';
