@@ -137,7 +137,7 @@ test('泥酔モード：泥酔カードが混ざり、12枚ごとにチェイサ
 test('だれも当てはまらない：貯金は上限なしで溜まり、いたら総取り', () => {
   let s = K.startGame(room(3, 'k1'), rng(11));
   const hit = KIOKU_CARDS.filter((c) => c.set === 1 && ['match', 'recent', 'late'].includes(c.g)).map((c) => c.id);
-  s.game.deck = [hit[0], hit[1], 'K1-33', ...hit.slice(2, 10)];
+  s.game.deck = [hit[0], hit[1], 'K1-37', ...hit.slice(2, 10)];
   s.game.pos = 0;
   const step = (fn) => { s = K.draw(s, s.game.turn); s = fn(s, s.game.turn); };
   step(K.none);
@@ -165,6 +165,35 @@ test('だれも当てはまらない：貯金は上限なしで溜まり、い�
   // また貯金1つから
   step(K.none);
   assert.equal(s.game.pot, 1);
+});
+
+test('貯金があるときに全員で乾杯：分け合わず全員がひとりずつ貯金ぶん、貯金は0に', () => {
+  let s = K.startGame(room(3, 'k1'), rng(5));
+  const hit = KIOKU_CARDS.filter((c) => c.set === 1 && c.g === 'match').map((c) => c.id);
+  // 乾杯の文字があっても「全員で乾杯」でないカード（K1-34）では精算しない
+  s.game.deck = ['K1-33', hit[0], hit[1], hit[2], 'K1-34', 'K1-40', hit[3]];
+  s.game.pos = 0;
+  const step = (fn) => { s = K.draw(s, s.game.turn); s = fn(s, s.game.turn); };
+  // 貯金0で乾杯：なにも起きない
+  step(K.next);
+  assert.equal(s.game.notice, null);
+  assert.equal(s.game.pot, 0);
+  step(K.none); step(K.none); step(K.none);
+  assert.equal(s.game.pot, 3);
+  step(K.next); // K1-34
+  assert.equal(s.game.pot, 3);
+  assert.equal(s.game.notice, null);
+  // 全員で乾杯 → 全員ひとりずつ×3（三口ずつ）、貯金0
+  s = K.draw(s, s.game.turn);
+  assert.equal(K.isToastCard(K.currentCard(s)), true);
+  s = K.next(s, s.game.turn);
+  assert.equal(s.game.pot, 0);
+  assert.deepEqual([s.game.notice.kind, s.game.notice.mult], ['kanpai', 3]);
+  assert.equal(K.penaltyText('一口飲む', s.game.notice.mult), '三口飲む');
+  // 対象は「全員で乾杯」の4枚。2人モード・泥酔モードの文面でも乾杯のまま
+  assert.deepEqual(KIOKU_CARDS.filter((c) => c.toast).map((c) => c.id), ['K1-33', 'K1-40', 'K2-06']);
+  assert.equal(K.isToastCard(K.cardView('KX-08', { hard: true })), true);
+  for (const id of ['K1-33', 'K1-40', 'K2-06', 'KX-08']) assert.match(K.cardView(id, { duo: true }).t, /乾杯/);
 });
 
 test('ペナルティの倍数表示', () => {

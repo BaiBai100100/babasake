@@ -258,7 +258,7 @@ function afterStateChange(prev, s) {
   }
   if (g?.chaser && !pg?.chaser) toast('チェイサータイム！ 全員お水を一口', 3500);
   if (isKioku(s) && g?.notice && pg && (!pg.notice || pg.notice.n !== g.notice.n || pg.notice.kind !== g.notice.kind)) {
-    if (g.notice.kind === 'paid') vibrate([120, 60, 120]);
+    if (g.notice.kind === 'paid' || g.notice.kind === 'kanpai') vibrate([120, 60, 120]);
   }
   if (s.phase === 'play' && actorOf(s) === me.id && (!prev || actorOf(prev) !== me.id || prev.phase !== 'play')) vibrate([70, 40, 70]);
   document.title = s.phase === 'play' && actorOf(s) === me.id && !ui.local ? '● あなたの番｜NOMIKAI CARDS' : 'NOMIKAI CARDS';
@@ -832,7 +832,8 @@ function kCard(s) {
   const pen = s.settings?.penalty || (g.hard ? '二口飲む' : '一口飲む');
   const text = esc(c.t).replace(/私/g, '<span class="me-word">私</span>');
   let foot = '';
-  if (genre.foot === 'hit') foot = `当てはまった人 → ${esc(K.penaltyText(pen, (g.pot || 0) + 1))}${g.pot ? `<span class="pot-note">貯金${g.pot}つぶん込み</span>` : ''}`;
+  if (K.isToastCard(c) && g.pot) foot = `乾杯して${everyone(g)} → ${esc(K.penaltyText(pen, g.pot))}<span class="pot-note">貯金${g.pot}つぶん</span>`;
+  else if (genre.foot === 'hit') foot = `当てはまった人 → ${esc(K.penaltyText(pen, (g.pot || 0) + 1))}${g.pot ? `<span class="pot-note">貯金${g.pot}つぶん込み</span>` : ''}`;
   else if (genre.foot === 'pass') foot = `言えなければ → ${esc(pen)}`;
   else if (c.t.includes('ペナルティ')) foot = `ペナルティ ＝ ${esc(pen)}`;
   const fl = anim(`${s.created}:${s.round}:${g.n}`, 650);
@@ -880,6 +881,8 @@ function kControls(s) {
 function kPen(s) {
   return s.settings?.penalty || (s.game.hard ? '二口飲む' : '一口飲む');
 }
+// 乾杯で貯金を受けるのは全員（分け合わず、ひとりずつ同じ量）
+const everyone = (g) => (g?.duo ? '2人それぞれ' : '全員ひとりずつ');
 // 貯金は上限なし：5つまでは●で並べ、それ以上は「●×12」
 const potDots = (n) => (n <= 5 ? '●'.repeat(n) : `●×${n}`);
 
@@ -889,6 +892,7 @@ function noticeText(s, nt, html = true) {
   const b = (t) => (html ? `<b>${t}</b>` : `${t}：`);
   if (nt.kind === 'stock') return `${b('だれも当てはまらず')}ペナルティを貯金（${potDots(nt.pot)}）。次に当てはまった人は${K.penaltyText(pen, nt.pot + 1)}`;
   if (nt.kind === 'paid') return `${b('貯金ぶんまとめて')}当てはまった人が${K.penaltyText(pen, nt.mult)}`;
+  if (nt.kind === 'kanpai') return `${b('貯金で乾杯')}${everyone(s.game)}${K.penaltyText(pen, nt.mult)}`;
   return '';
 }
 function kNotice(s) {
@@ -972,7 +976,9 @@ const RULES_KIOKU = `<h2>記憶無くしちゃダメですか</h2>
   <tr><td>2</td><td>第2弾</td><td>王様・指名・ミニゲーム・暴露</td></tr>
 </table>
 <h3>だれも当てはまらないとき</h3>
-<p class="hint"><b>いなけりゃ貯金、いたら総取り。</b>「だれもいない」を押すとペナルティが1つ貯金されます。貯金に上限はなく、だれも当てはまらないかぎりどんどん溜まります。次に当てはまった人が出たら、貯金ぶんもまとめて受けます（貯金1つで2倍、2つで3倍、5つで6倍…）。受けたら貯金は0に戻ります。</p>`;
+<p class="hint"><b>いなけりゃ貯金、いたら総取り、乾杯なら全員。</b>「だれもいない」を押すとペナルティが1つ貯金されます。貯金に上限はなく、だれも当てはまらないかぎりどんどん溜まります。次に当てはまった人が出たら、貯金ぶんもまとめて受けます（貯金1つで2倍、2つで3倍、5つで6倍…）。<br>
+貯金があるときに「全員で乾杯」のカードが出たら、全員がひとりずつ貯金ぶんを受けます（貯金3つなら全員が三口ずつ）。分け合いはなし。<br>
+どちらも、受けたら貯金は0に戻ります。</p>`;
 const RULES_COMMON = `<h3>モード</h3>
 <p class="hint"><b>2人モード</b>：参加者がちょうど2人のとき自動で切り替わり、お題が「相手と」「2人で」になります。<br>
 <b>CPU</b>：ロビーの「CPUを呼ぶ」で追加。CPUは自分で引いて、選んで、指名もします。お題の実行は人間が「次へ」を押します。<br>
@@ -1201,11 +1207,11 @@ window.render_game_to_text = () => {
     v: s?.v ?? null, round: s?.round ?? 0, overlay: !!document.querySelector('.overlay'), settings: s?.settings ?? null,
     duo: g?.duo ?? null, hard: g?.hard ?? null,
   };
-  if (isKioku(s) && g) Object.assign(base, { turn: g.turn, card: g.card, text: K.currentCard(s)?.t ?? null, remaining: K.remaining(s), n: g.n, rules: g.rules, committed: g.committed, pot: g.pot ?? 0, notice: g.notice ?? null, hit: K.isHitCard(K.currentCard(s)) });
+  if (isKioku(s) && g) Object.assign(base, { turn: g.turn, card: g.card, text: K.currentCard(s)?.t ?? null, remaining: K.remaining(s), n: g.n, rules: g.rules, committed: g.committed, pot: g.pot ?? 0, notice: g.notice ?? null, hit: K.isHitCard(K.currentCard(s)), toast: K.isToastCard(K.currentCard(s)) });
   else if (g) Object.assign(base, { turn: g.turn, target: L.drawTarget(s), myHand: g.hands[me.id] ?? null, finished: g.finished, loser: g.loser, penalty: g.penalty, pair: g.pair ? { by: g.pair.by, cards: g.pair.cards, chosen: g.pair.chosen, committed: g.pair.committed } : null });
   return JSON.stringify(base);
 };
-window.__bb = { ui, L, K, me };
+window.__bb = { ui, L, K, me, commit }; // commit はテストで山札を仕込むため
 
 // ---------- 起動 ----------
 render();

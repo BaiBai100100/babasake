@@ -29,4 +29,5 @@ node --test test/logic.test.mjs          # ルール（ランダム1000ゲーム
 python3 -m http.server 8765 &            # 別ターミナル
 node test/e2e.mjs http://localhost:8765/   # 複数台で通し（ババ酒3人＋CPU、記憶2人＋泥酔）
 node test/smoke.mjs http://localhost:8765/ # 1台モードで全画面を撮影
+node test/toast.mjs http://localhost:8765/ # 貯金があるときの「全員で乾杯」
 ```

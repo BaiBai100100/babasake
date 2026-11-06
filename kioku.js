@@ -5,6 +5,8 @@ import { shuffle, nameOf } from './logic.js';
 export const MIN_PLAYERS = 2;
 // だれも当てはまらないときの貯金（キャリーオーバー）は上限なし。次に当てはまった人が全部受ける
 export const isHitCard = (c) => !!c && GENRES[c.g]?.foot === 'hit';
+// 全員で乾杯するカード：貯金があれば、分け合わずに全員がひとりずつ貯金ぶんを受ける
+export const isToastCard = (c) => !!c?.toast;
 
 const KANJI = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 // 99までは漢数字（十二、二十四）、それより上は算用数字
@@ -159,10 +161,16 @@ export function next(s0, pid) {
   if (g?.step !== 'card') fail('いまはカードの場面ではありません');
   if (g.turn !== pid) fail('進めるのはカードを引いた人です');
   if (!g.committed) fail('先に指名・入力を終わらせてください');
+  const cv = cardView(g.card, g);
   // 当てはまった人がいた：貯金があれば、その人がまとめて受ける
-  if (isHitCard(cardView(g.card, g)) && g.pot > 0) {
+  if (isHitCard(cv) && g.pot > 0) {
     g.notice = { kind: 'paid', mult: g.pot + 1, n: g.n };
     log(s, `貯金ぶんまとめて ×${g.pot + 1}`);
+    g.pot = 0;
+  } else if (isToastCard(cv) && g.pot > 0) {
+    // 全員で乾杯：分け合わず、全員がひとりずつ貯金ぶん（×貯金の数）を受ける
+    g.notice = { kind: 'kanpai', mult: g.pot, n: g.n }; // 'toast' は画面のポップアップのクラス名と衝突するので使わない
+    log(s, `乾杯で貯金を精算：全員ひとりずつ ×${g.pot}`);
     g.pot = 0;
   } else {
     g.notice = null;

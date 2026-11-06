@@ -380,6 +380,7 @@ input:focus { outline: none; box-shadow: 3px 3px 0 var(--pink); }
 .k-notice { width: 100%; max-width: 380px; border: 2.5px solid var(--ink); border-radius: 14px; padding: 10px 14px; background: var(--paper-2); font-weight: 700; font-size: 13.5px; line-height: 1.55; box-shadow: 4px 4px 0 var(--blue); transform: rotate(-1deg); margin-top: 4px; }
 .k-notice b { display: block; font-family: var(--display); font-weight: 400; font-size: 17px; }
 .k-notice.paid { background: var(--blue-l); }
+.k-notice.kanpai { background: var(--pink-l); }
 .chip.pot { background: var(--blue); color: var(--paper-2); }
 .pot-note { display: inline-block; margin-left: 6px; font-size: 11px; padding: 0 6px; border-radius: 6px; background: var(--pink-l); color: var(--ink); vertical-align: 1px; }
 .k-ctl { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
