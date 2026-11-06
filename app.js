@@ -257,6 +257,9 @@ function afterStateChange(prev, s) {
     }
   }
   if (g?.chaser && !pg?.chaser) toast('チェイサータイム！ 全員お水を一口', 3500);
+  if (isKioku(s) && g?.notice && pg && (!pg.notice || pg.notice.n !== g.notice.n || pg.notice.kind !== g.notice.kind)) {
+    if (g.notice.kind === 'drawer') vibrate([120, 60, 120]);
+  }
   if (s.phase === 'play' && actorOf(s) === me.id && (!prev || actorOf(prev) !== me.id || prev.phase !== 'play')) vibrate([70, 40, 70]);
   document.title = s.phase === 'play' && actorOf(s) === me.id && !ui.local ? '● あなたの番｜NOMIKAI CARDS' : 'NOMIKAI CARDS';
   keepAwake(s.phase === 'play' || s.phase === 'over');
@@ -629,6 +632,7 @@ function topBar() {
     if (g.double) chips.push('<span class="chip x2c">次のお題 2倍</span>');
     if (g.skip) chips.push(`<span class="chip">スキップ待ち ${g.skip}</span>`);
     if (g.duo) chips.push('<span class="chip">2人モード</span>');
+    if (isKioku(s) && g.pot) chips.push(`<span class="chip pot">貯金 ${potDots(g.pot)}</span>`);
     if (g.hard) {
       const lv = Math.round(drunkLevel(s) * 5);
       chips.push(`<span class="chip hard">泥酔 ${'●'.repeat(lv)}${'○'.repeat(5 - lv)}</span>`);
@@ -827,7 +831,7 @@ function kCard(s) {
   const pen = s.settings?.penalty || (g.hard ? '二口飲む' : '一口飲む');
   const text = esc(c.t).replace(/私/g, '<span class="me-word">私</span>');
   let foot = '';
-  if (genre.foot === 'hit') foot = `当てはまった人 → ${esc(pen)}`;
+  if (genre.foot === 'hit') foot = `当てはまった人 → ${esc(K.penaltyText(pen, (g.pot || 0) + 1))}${g.pot ? `<span class="pot-note">貯金${g.pot}つぶん込み</span>` : ''}`;
   else if (genre.foot === 'pass') foot = `言えなければ → ${esc(pen)}`;
   else if (c.t.includes('ペナルティ')) foot = `ペナルティ ＝ ${esc(pen)}`;
   const fl = anim(`${s.created}:${s.round}:${g.n}`, 650);
@@ -872,6 +876,25 @@ function kControls(s) {
   return out;
 }
 
+function kPen(s) {
+  return s.settings?.penalty || (s.game.hard ? '二口飲む' : '一口飲む');
+}
+const potDots = (n) => `${'●'.repeat(n)}${'○'.repeat(K.POT_MAX - n)}`;
+
+// だれも当てはまらなかった／貯金を精算したときのお知らせ
+function noticeText(s, nt, html = true) {
+  const pen = kPen(s);
+  const b = (t) => (html ? `<b>${t}</b>` : `${t}：`);
+  if (nt.kind === 'stock') return `${b('だれも当てはまらず')}ペナルティを貯金（${potDots(nt.pot)}）。次に当てはまった人は${K.penaltyText(pen, nt.pot + 1)}`;
+  if (nt.kind === 'drawer') return `${b('だれもいない＆貯金満タン')}引いた${L.nameOf(s, nt.who)}が${K.penaltyText(pen, nt.mult)}！`;
+  if (nt.kind === 'paid') return `${b('貯金ぶんまとめて')}当てはまった人が${K.penaltyText(pen, nt.mult)}`;
+  return '';
+}
+function kNotice(s) {
+  const nt = s.game.notice;
+  return nt ? `<div class="k-notice ${nt.kind}" role="status">${esc(noticeText(s, nt, false)).replace(/^(.+?)：/, '<b>$1</b>')}</div>` : '';
+}
+
 function viewKioku() {
   const s = S();
   const g = s.game;
@@ -881,10 +904,10 @@ function viewKioku() {
   let stage;
   let action;
   if (g.step === 'end') {
-    stage = `<div class="k-end"><img src="img/result.webp" alt=""><h2>山札がなくなった！</h2><p class="hint">${g.n}枚ぶん遊びました</p></div>`;
+    stage = `${kNotice(s)}<div class="k-end"><img src="img/result.webp" alt=""><h2>山札がなくなった！</h2><p class="hint">${g.n}枚ぶん遊びました</p></div>`;
     action = isHost() ? '<button class="btn primary big" data-act="kreshuffle">シャッフルしてもう一周</button><button class="btn" data-act="lobby">設定を変える（ロビーへ）</button>' : '<p class="waiting">ホストの操作を待っています</p>';
   } else if (g.step === 'draw') {
-    stage = `<div class="k-deck" aria-label="山札">${cardBack({ size: 'l', extra: 'd3' })}${cardBack({ size: 'l', extra: 'd2' })}${cardBack({ size: 'l', extra: 'd1' })}</div>
+    stage = `${kNotice(s)}<div class="k-deck" aria-label="山札">${cardBack({ size: 'l', extra: 'd3' })}${cardBack({ size: 'l', extra: 'd2' })}${cardBack({ size: 'l', extra: 'd1' })}</div>
       ${g.hard && g.n > 0 && g.n % 12 === 0 && g.lastWater !== g.n ? '<p class="k-next-water">次はチェイサータイム</p>' : ''}`;
     action = mine ? '<button class="btn primary big" data-act="kdraw">カードを引く</button>'
       : `<p class="waiting">${isCpu(g.turn) ? `${nm(g.turn)}が引いています…` : `${nm(g.turn)}が引きます`}</p>`;
@@ -892,8 +915,17 @@ function viewKioku() {
     stage = `${kCard(s)}<div class="k-ctl">${kControls(s)}</div>`;
     const c = K.currentCard(s);
     const need = !g.committed && (c.need === 'text' || (typeof c.need === 'number' && K.candidates(s, g.turn).length > c.need));
-    action = mine ? `<button class="btn primary big" data-act="knext" ${need ? 'disabled' : ''}>次の人へ</button>`
-      : `<p class="waiting">${nm(g.turn)}が進めます</p>`;
+    if (mine && K.isHitCard(c)) {
+      const pen = kPen(s);
+      const sub = (g.pot || 0) < K.POT_MAX
+        ? `ペナルティを貯金して次へ（いま${potDots(g.pot || 0)}）`
+        : `貯金満タン → ${nm(g.turn)}が${esc(K.penaltyText(pen, K.POT_MAX + 1))}`;
+      action = `<button class="btn primary big" data-act="knext">いた！ 次の人へ</button>
+        <button class="btn stack ${(g.pot || 0) >= K.POT_MAX ? 'danger' : ''}" data-act="knone">だれもいない<small>${sub}</small></button>`;
+    } else {
+      action = mine ? `<button class="btn primary big" data-act="knext" ${need ? 'disabled' : ''}>次の人へ</button>`
+        : `<p class="waiting">${nm(g.turn)}が進めます</p>`;
+    }
   }
   return `${seatStrip()}
     <section class="k-stage">
@@ -939,7 +971,9 @@ const RULES_KIOKU = `<h2>記憶無くしちゃダメですか</h2>
 <table class="suits">
   <tr><td>1</td><td>第1弾</td><td>当てはまった人・直近◯◯した人・全員参加・遅刻ドジ</td></tr>
   <tr><td>2</td><td>第2弾</td><td>王様・指名・ミニゲーム・暴露</td></tr>
-</table>`;
+</table>
+<h3>だれも当てはまらないとき</h3>
+<p class="hint"><b>いなけりゃ貯金、満タンなら私。</b>「だれもいない」を押すとペナルティが1つ貯金されます。次に当てはまった人が出たら、貯金ぶんもまとめて受けます（貯金1つで2倍、2つで3倍）。貯金が2つたまった状態でまただれもいなければ、カードを引いた「私」が3倍を受けて貯金はリセット。</p>`;
 const RULES_COMMON = `<h3>モード</h3>
 <p class="hint"><b>2人モード</b>：参加者がちょうど2人のとき自動で切り替わり、お題が「相手と」「2人で」になります。<br>
 <b>CPU</b>：ロビーの「CPUを呼ぶ」で追加。CPUは自分で引いて、選んで、指名もします。お題の実行は人間が「次へ」を押します。<br>
@@ -1140,6 +1174,7 @@ function handle(act, d) {
     case 'kcommit': if (iAct()) commit((x) => K.commit(x, x.game.turn, { picks: ui.picks, text: ui.text })); break;
     case 'ktimer': commit((x) => K.startTimer(x, x.game.turn)); break;
     case 'knext': if (iAct()) commit((x) => K.next(x, x.game.turn)); break;
+    case 'knone': if (iAct()) commit((x) => K.none(x, x.game.turn)); break;
     case 'kreshuffle': commit((x) => K.reshuffle(x)); break;
     default: break;
   }
@@ -1167,7 +1202,7 @@ window.render_game_to_text = () => {
     v: s?.v ?? null, round: s?.round ?? 0, overlay: !!document.querySelector('.overlay'), settings: s?.settings ?? null,
     duo: g?.duo ?? null, hard: g?.hard ?? null,
   };
-  if (isKioku(s) && g) Object.assign(base, { turn: g.turn, card: g.card, text: K.currentCard(s)?.t ?? null, remaining: K.remaining(s), n: g.n, rules: g.rules, committed: g.committed });
+  if (isKioku(s) && g) Object.assign(base, { turn: g.turn, card: g.card, text: K.currentCard(s)?.t ?? null, remaining: K.remaining(s), n: g.n, rules: g.rules, committed: g.committed, pot: g.pot ?? 0, notice: g.notice ?? null, hit: K.isHitCard(K.currentCard(s)) });
   else if (g) Object.assign(base, { turn: g.turn, target: L.drawTarget(s), myHand: g.hands[me.id] ?? null, finished: g.finished, loser: g.loser, penalty: g.penalty, pair: g.pair ? { by: g.pair.by, cards: g.pair.cards, chosen: g.pair.chosen, committed: g.pair.committed } : null });
   return JSON.stringify(base);
 };

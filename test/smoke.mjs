@@ -35,6 +35,7 @@ await page.click('[data-act="start"]');
 await shot('05-kioku-draw');
 // 何枚か引いて、いろいろな場面を撮る
 const seen = new Set();
+let nones = 0;
 for (let i = 0; i < 40; i++) {
   let s = await st();
   if (s.step === 'draw') {
@@ -58,6 +59,14 @@ for (let i = 0; i < 40; i++) {
     } else if (await page.locator('#in-rule').count()) {
       await page.fill('#in-rule', '左手で飲む');
       await page.click('[data-act="kcommit"]');
+    }
+    if (await page.locator('[data-act="knone"]').count() && nones < 3) {
+      nones++;
+      if (nones === 3) await shot('20-kioku-none-full');
+      await page.click('[data-act="knone"]');
+      await sleep(350);
+      if (nones === 3) { await shot('21-kioku-notice-drawer'); console.log('pot after full none', (await st()).pot, JSON.stringify((await st()).notice)); }
+      continue;
     }
     if (await page.locator('[data-act="knext"]:not([disabled])').count()) await page.click('[data-act="knext"]');
     else await sleep(1200);

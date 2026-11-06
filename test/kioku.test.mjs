@@ -134,6 +134,44 @@ test('泥酔モード：泥酔カードが混ざり、12枚ごとにチェイサ
   assert.equal(K.cardView('K1-37', { hard: true }).t, 'とりあえず全員で二口');
 });
 
+test('だれも当てはまらない：貯金→満タンなら私→いたら精算', () => {
+  let s = K.startGame(room(3, 'k1'), rng(11));
+  const hit = KIOKU_CARDS.filter((c) => c.set === 1 && ['match', 'recent', 'late'].includes(c.g)).map((c) => c.id);
+  s.game.deck = [hit[0], hit[1], 'K1-33', hit[2], hit[3], hit[4]];
+  s.game.pos = 0;
+  const step = (fn) => { s = K.draw(s, s.game.turn); s = fn(s, s.game.turn); };
+  step(K.none);
+  assert.equal(s.game.pot, 1);
+  assert.equal(s.game.notice.kind, 'stock');
+  step(K.none);
+  assert.equal(s.game.pot, 2);
+  // 当てはまり系でないカード：「だれもいない」は使えず、貯金はそのまま
+  s = K.draw(s, s.game.turn);
+  assert.equal(s.game.notice, null);
+  assert.throws(() => K.none(s, s.game.turn), /使えません/);
+  s = K.next(s, s.game.turn);
+  assert.equal(s.game.pot, 2);
+  // 満タンでまた誰もいない → 引いた「私」が3倍、貯金リセット
+  s = K.draw(s, s.game.turn);
+  const drawer = s.game.turn;
+  s = K.none(s, drawer);
+  assert.equal(s.game.pot, 0);
+  assert.deepEqual([s.game.notice.kind, s.game.notice.who, s.game.notice.mult], ['drawer', drawer, 3]);
+  // 貯金1つのあと当てはまった人がいた → 2倍で精算
+  step(K.none);
+  step(K.next);
+  assert.equal(s.game.pot, 0);
+  assert.deepEqual([s.game.notice.kind, s.game.notice.mult], ['paid', 2]);
+});
+
+test('ペナルティの倍数表示', () => {
+  assert.equal(K.penaltyText('一口飲む', 1), '一口飲む');
+  assert.equal(K.penaltyText('一口飲む', 3), '三口飲む');
+  assert.equal(K.penaltyText('二口飲む', 3), '六口飲む');
+  assert.equal(K.penaltyText('一発芸＋一口', 2), '一発芸＋二口');
+  assert.equal(K.penaltyText('一発芸', 2), '一発芸を2回');
+});
+
 test('2人未満では始められない', () => {
   assert.throws(() => K.startGame(room(1)), /2人以上/);
 });

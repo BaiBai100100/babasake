@@ -154,13 +154,15 @@ if (!process.env.ONLY_B) {
   await waitAll(pages, (s) => s.phase === 'lobby' && s.players.length === 2, 'B 2人');
   await host.click('[data-act="toggle-hard"]');
   await waitAll(pages, (s) => s.settings?.hard === true, 'B 泥酔ON反映');
+  await host.click('[data-act="set-deck"][data-d="mix"]');
+  await waitAll(pages, (s) => s.settings?.deck === 'mix', 'B 山札mix反映');
   await sleep(3200);
   await shot(guest, 'B1-lobby-guest');
   await host.click('[data-act="start"]');
   const s0 = await waitAll(pages, (s) => s.phase === 'play', 'B 開始');
   console.log('B 2人モード:', s0[0].duo, '泥酔:', s0[0].hard, '山札:', s0[0].remaining);
   const ids = s0.map((x) => x.me);
-  const checks = { duoText: false, timer: false, water: false };
+  const checks = { duoText: false, timer: false, water: false, none: false };
   for (let i = 0; i < 30; i++) {
     // 2台の状態がそろうまで待ってから読む
     for (let t = 0; t < 40; t++) { const [a, b] = await Promise.all(pages.map(st)); if (a.v === b.v) break; await sleep(200); }
@@ -178,6 +180,15 @@ if (!process.env.ONLY_B) {
         checks.timer = (await other.locator('.timer-num').count()) === 1;
       }
       if (await p.locator('#in-rule').count()) { await p.fill('#in-rule', '左手で飲む'); await p.click('[data-act="kcommit"]'); }
+      if (!checks.none && await p.locator('[data-act="knone"]').count()) {
+        await p.click('[data-act="knone"]');
+        await sleep(1500);
+        const other = pages.find((x) => x !== p);
+        const o = await st(other);
+        checks.none = o.pot === 1 && (await other.locator('.k-notice.stock').count()) === 1;
+        await shot(other, 'B5-none-notice-other');
+        continue;
+      }
       await p.click('[data-act="knext"]', { timeout: 4000 });
       await sleep(300);
     }
@@ -185,7 +196,7 @@ if (!process.env.ONLY_B) {
   await sleep(800);
   const fin = await Promise.all(pages.map(st));
   await shot(host, 'B4-late');
-  console.log('B 2台の状態が一致:', fin[0].v === fin[1].v && fin[0].n === fin[1].n, '引いた枚数:', fin[0].n, '2人用の文面:', checks.duoText, 'タイマー共有:', checks.timer, 'チェイサー:', checks.water);
+  console.log('B 2台の状態が一致:', fin[0].v === fin[1].v && fin[0].n === fin[1].n, '引いた枚数:', fin[0].n, '2人用の文面:', checks.duoText, 'タイマー共有:', checks.timer, 'チェイサー:', checks.water, 'だれもいない共有:', checks.none);
 }
 
 console.log('コンソールエラー:', errors.length ? errors : 'なし');

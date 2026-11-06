@@ -1,8 +1,23 @@
 // 記憶無くしちゃダメですか：山札から1枚引いて、書いてあることに従う
-import { KIOKU_CARDS, KIOKU_BY_ID, HARD_CARDS, WATER_CARD, WATER_EVERY } from './kioku-data.js';
+import { KIOKU_CARDS, KIOKU_BY_ID, HARD_CARDS, WATER_CARD, WATER_EVERY, GENRES } from './kioku-data.js';
 import { shuffle, nameOf } from './logic.js';
 
 export const MIN_PLAYERS = 2;
+// だれも当てはまらないときの貯金（キャリーオーバー）の上限。満タンでまた誰もいなければ「私」が受ける
+export const POT_MAX = 2;
+export const isHitCard = (c) => !!c && GENRES[c.g]?.foot === 'hit';
+
+const KANJI = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+// ペナルティを倍にした文面（一口×3 → 三口、一発芸×2 → 一発芸を2回）
+export function penaltyText(pen, mult = 1) {
+  if (mult <= 1) return pen;
+  const m = pen.match(/([一二三四五六七八九十])口/);
+  if (m) {
+    const n = KANJI.indexOf(m[1]) * mult;
+    return pen.replace(m[0], `${n <= 10 ? KANJI[n] : n}口`);
+  }
+  return `${pen}を${mult}回`;
+}
 const MAX_RULES_HARD = 3;
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const fail = (m) => { throw new Error(m); };
@@ -50,7 +65,7 @@ export function startGame(s0, rng = Math.random) {
   s.game = {
     deck, pos: 0, step: 'draw', card: null, picks: [], text: null, committed: false,
     turn: s.players[Math.floor(rng() * s.players.length)].id,
-    rules: [], timer: null, n: 0, log: [], history: [],
+    rules: [], timer: null, n: 0, log: [], history: [], pot: 0, notice: null,
     duo: s.players.length === 2, hard,
   };
   log(s, `第${s.round}ゲーム開始（${deck.length}枚${s.game.duo ? '・2人モード' : ''}${hard ? '・泥酔モード' : ''}）`);
@@ -82,6 +97,7 @@ export function draw(s0, pid) {
   }
   g.n++;
   g.step = 'card';
+  g.notice = null;
   g.picks = [];
   g.text = null;
   g.timer = null;
@@ -137,6 +153,40 @@ export function next(s0, pid) {
   if (g?.step !== 'card') fail('いまはカードの場面ではありません');
   if (g.turn !== pid) fail('進めるのはカードを引いた人です');
   if (!g.committed) fail('先に指名・入力を終わらせてください');
+  // 当てはまった人がいた：貯金があれば、その人がまとめて受ける
+  if (isHitCard(cardView(g.card, g)) && g.pot > 0) {
+    g.notice = { kind: 'paid', mult: g.pot + 1, n: g.n };
+    log(s, `貯金ぶんまとめて ×${g.pot + 1}`);
+    g.pot = 0;
+  } else {
+    g.notice = null;
+  }
+  return advance(s, pid);
+}
+
+// だれも当てはまらなかった：貯金する。満タンならカードを引いた「私」が受ける
+export function none(s0, pid) {
+  const s = clone(s0);
+  const g = s.game;
+  if (g?.step !== 'card') fail('いまはカードの場面ではありません');
+  if (g.turn !== pid) fail('進めるのはカードを引いた人です');
+  if (!isHitCard(cardView(g.card, g))) fail('このカードでは使えません');
+  g.pot = g.pot || 0;
+  if (g.pot < POT_MAX) {
+    g.pot++;
+    g.notice = { kind: 'stock', pot: g.pot, n: g.n };
+    log(s, `だれも当てはまらず、ペナルティを貯金（${g.pot}つ）`);
+  } else {
+    const mult = g.pot + 1;
+    g.notice = { kind: 'drawer', who: pid, mult, n: g.n };
+    g.pot = 0;
+    log(s, `だれも当てはまらず貯金満タン → ${nameOf(s, pid)}が×${mult}`);
+  }
+  return advance(s, pid);
+}
+
+function advance(s, pid) {
+  const g = s.game;
   const seats = s.players.map((p) => p.id);
   g.turn = seats[(seats.indexOf(pid) + 1) % seats.length];
   g.card = null;
@@ -172,6 +222,7 @@ export function autoAction(s, rng = Math.random) {
       const cands = shuffle(candidates(s, pid), rng);
       return { type: 'commit', pid, input: { picks: cands.slice(0, c.need) } };
     }
+    if (isHitCard(currentCard(s)) && rng() < 0.3) return { type: 'none', pid };
     return { type: 'next', pid };
   }
   return null;
@@ -181,6 +232,7 @@ export function applyAction(s, a, rng = Math.random) {
   if (a.type === 'draw') return draw(s, a.pid);
   if (a.type === 'commit') return commit(s, a.pid, a.input);
   if (a.type === 'next') return next(s, a.pid);
+  if (a.type === 'none') return none(s, a.pid);
   if (a.type === 'timer') return startTimer(s, a.pid);
   if (a.type === 'reshuffle') return reshuffle(s, rng);
   throw new Error('unknown ' + a.type);
