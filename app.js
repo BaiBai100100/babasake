@@ -832,7 +832,7 @@ function kCard(s) {
   const pen = s.settings?.penalty || (g.hard ? '二口飲む' : '一口飲む');
   const text = esc(c.t).replace(/私/g, '<span class="me-word">私</span>');
   let foot = '';
-  if (K.isToastCard(c) && g.pot) foot = `乾杯して${everyone(g)} → ${esc(K.penaltyText(pen, g.pot))}<span class="pot-note">貯金${g.pot}つぶん</span>`;
+  if (K.isToastCard(c) && g.pot) foot = `乾杯して${everyone(g)} → ${esc(K.penaltyText(pen, g.pot + 1))}<span class="pot-note">貯金${g.pot}つぶん込み</span>`;
   else if (genre.foot === 'hit') foot = `当てはまった人 → ${esc(K.penaltyText(pen, (g.pot || 0) + 1))}${g.pot ? `<span class="pot-note">貯金${g.pot}つぶん込み</span>` : ''}`;
   else if (genre.foot === 'pass') foot = `言えなければ → ${esc(pen)}`;
   else if (c.t.includes('ペナルティ')) foot = `ペナルティ ＝ ${esc(pen)}`;
@@ -977,7 +977,7 @@ const RULES_KIOKU = `<h2>記憶無くしちゃダメですか</h2>
 </table>
 <h3>だれも当てはまらないとき</h3>
 <p class="hint"><b>いなけりゃ貯金、いたら総取り、乾杯なら全員。</b>「だれもいない」を押すとペナルティが1つ貯金されます。貯金に上限はなく、だれも当てはまらないかぎりどんどん溜まります。次に当てはまった人が出たら、貯金ぶんもまとめて受けます（貯金1つで2倍、2つで3倍、5つで6倍…）。<br>
-貯金があるときに「全員で乾杯」のカードが出たら、全員がひとりずつ貯金ぶんを受けます（貯金3つなら全員が三口ずつ）。分け合いはなし。<br>
+貯金があるときに「全員で乾杯」のカードが出たら、全員がひとりずつ、乾杯の一杯に貯金ぶんを足して受けます（当てはまった人と同じで、貯金2つなら全員が3倍＝三口ずつ）。分け合いはなし。<br>
 どちらも、受けたら貯金は0に戻ります。</p>`;
 const RULES_COMMON = `<h3>モード</h3>
 <p class="hint"><b>2人モード</b>：参加者がちょうど2人のとき自動で切り替わり、お題が「相手と」「2人で」になります。<br>

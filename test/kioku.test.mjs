@@ -183,13 +183,13 @@ test('貯金があるときに全員で乾杯：分け合わず全員がひと�
   step(K.next); // K1-34
   assert.equal(s.game.pot, 3);
   assert.equal(s.game.notice, null);
-  // 全員で乾杯 → 全員ひとりずつ×3（三口ずつ）、貯金0
+  // 全員で乾杯 → 乾杯ぶん＋貯金3つで、全員ひとりずつ×4（四口ずつ）、貯金0
   s = K.draw(s, s.game.turn);
   assert.equal(K.isToastCard(K.currentCard(s)), true);
   s = K.next(s, s.game.turn);
   assert.equal(s.game.pot, 0);
-  assert.deepEqual([s.game.notice.kind, s.game.notice.mult], ['kanpai', 3]);
-  assert.equal(K.penaltyText('一口飲む', s.game.notice.mult), '三口飲む');
+  assert.deepEqual([s.game.notice.kind, s.game.notice.mult], ['kanpai', 4]);
+  assert.equal(K.penaltyText('一口飲む', s.game.notice.mult), '四口飲む');
   // 対象は「全員で乾杯」の4枚。2人モード・泥酔モードの文面でも乾杯のまま
   assert.deepEqual(KIOKU_CARDS.filter((c) => c.toast).map((c) => c.id), ['K1-33', 'K1-40', 'K2-06']);
   assert.equal(K.isToastCard(K.cardView('KX-08', { hard: true })), true);

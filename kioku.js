@@ -168,9 +168,9 @@ export function next(s0, pid) {
     log(s, `貯金ぶんまとめて ×${g.pot + 1}`);
     g.pot = 0;
   } else if (isToastCard(cv) && g.pot > 0) {
-    // 全員で乾杯：分け合わず、全員がひとりずつ貯金ぶん（×貯金の数）を受ける
-    g.notice = { kind: 'kanpai', mult: g.pot, n: g.n }; // 'toast' は画面のポップアップのクラス名と衝突するので使わない
-    log(s, `乾杯で貯金を精算：全員ひとりずつ ×${g.pot}`);
+    // 全員で乾杯：乾杯の1杯ぶん＋貯金ぶん（×(貯金+1)）を、分け合わず全員がひとりずつ受ける。当てはまった人と同じ倍率
+    g.notice = { kind: 'kanpai', mult: g.pot + 1, n: g.n }; // 'toast' は画面のポップアップのクラス名と衝突するので使わない
+    log(s, `乾杯で貯金を精算：全員ひとりずつ ×${g.pot + 1}`);
     g.pot = 0;
   } else {
     g.notice = null;

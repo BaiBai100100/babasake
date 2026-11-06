@@ -56,8 +56,8 @@ results.noticeText = (await page.locator('.k-notice').first().textContent().catc
 await shot('T2-toast-notice');
 
 const ok = results.potBefore === 2 && results.card === 'K1-33' && results.toastFlag === true
-  && results.potAfter === 0 && results.notice?.kind === 'kanpai' && results.notice?.mult === 2
-  && results.noticeVisible && /全員ひとりずつ二口飲む/.test(results.noticeText || '') && /全員ひとりずつ/.test(results.foot || '');
+  && results.potAfter === 0 && results.notice?.kind === 'kanpai' && results.notice?.mult === 3
+  && results.noticeVisible && /全員ひとりずつ三口飲む/.test(results.noticeText || '') && /全員ひとりずつ → 三口飲む/.test(results.foot || '');
 console.log(JSON.stringify(results));
 console.log('乾杯で全員ひとりずつ精算:', ok);
 console.log('コンソールエラー:', errors.length ? errors.join(' / ') : 'なし');
