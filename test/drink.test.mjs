@@ -4,7 +4,7 @@ import * as K from '../kioku.js';
 import * as L from '../logic.js';
 import { ODAI } from '../odai.js';
 import { GENRES, KIOKU_CARDS, HARD_CARDS, WATER_CARD } from '../kioku-data.js';
-import { drinkKind, kiokuDrink, babaDrink } from '../drink.js';
+import { drinkKind, kiokuDrink, kiokuHitDrink, babaDrink } from '../drink.js';
 
 const kd = (id, opt = {}, g = {}) => {
   const c = K.cardView(id, g);
@@ -21,8 +21,9 @@ test('文面の判定：ひとり／みんな／飲まない', () => {
   assert.equal(drinkKind('一発芸'), null);
 });
 
-test('記憶：当てはまり系はグラスひとつ、全員で乾杯はふたつ、飲まないカードは出さない', () => {
-  assert.deepEqual(kd('K1-01'), { kind: 'solo', water: false, mult: 1 });
+test('記憶：めくった瞬間は、全員で乾杯はふたつ・飲まないカードと当てはまり系は出さない', () => {
+  assert.equal(kd('K1-01'), null); // 当てはまり系は「いた！」を押してから
+  assert.equal(kd('K1-01', { pot: 5 }), null);
   assert.equal(kd('K1-33').kind, 'multi');
   assert.equal(kd('K1-37').kind, 'multi'); // とりあえず全員で一口
   assert.equal(kd('K1-35'), null); // 全員で、私のいいところを1つずつ言う
@@ -33,14 +34,19 @@ test('記憶：当てはまり系はグラスひとつ、全員で乾杯はふ�
   assert.deepEqual(kiokuDrink(K.cardView('KW', {}), { pen: '一口飲む' }), { kind: 'multi', water: true, mult: 1 });
 });
 
-test('記憶：ペナルティが飲まない系なら、当てはまり系・ペナルティ系では出さない', () => {
-  assert.equal(kd('K1-01', { pen: '一発芸' }), null);
+test('記憶：「いた！」を押したときの演出（貯金込みの倍率）。ペナルティが飲まない系なら出さない', () => {
+  assert.deepEqual(kiokuHitDrink('一口飲む', 1), { kind: 'solo', water: false, mult: 1 });
+  assert.equal(kiokuHitDrink('二口飲む', 14).mult, 14);
+  assert.equal(kiokuHitDrink('一発芸', 3), null);
+  assert.equal(kiokuHitDrink('一発芸＋一口', 1).kind, 'solo');
+});
+
+test('記憶：ペナルティが飲まない系なら、ペナルティ系では出さない', () => {
   assert.equal(kd('K1-38', { pen: '変顔で写真' }), null);
   assert.equal(kd('K1-33', { pen: '一発芸' }).kind, 'multi'); // 乾杯は文面そのものが飲む
 });
 
-test('記憶：貯金があれば倍率つき（当てはまり・全員で乾杯）', () => {
-  assert.equal(kd('K1-01', { pot: 2 }).mult, 3);
+test('記憶：貯金があれば倍率つき（全員で乾杯）', () => {
   assert.equal(kd('K1-33', { pot: 4 }).mult, 5);
   assert.equal(kd('K1-37', { pot: 4 }).mult, 1); // 乾杯カード以外の全員一口は貯金を受けない
 });

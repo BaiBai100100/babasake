@@ -162,6 +162,8 @@ export function next(s0, pid) {
   if (g.turn !== pid) fail('進めるのはカードを引いた人です');
   if (!g.committed) fail('先に指名・入力を終わらせてください');
   const cv = cardView(g.card, g);
+  // 当てはまり系で「いた！」が押された：飲む演出はこの瞬間に出す（めくった時点ではまだ決まっていない）
+  if (isHitCard(cv)) g.lastHit = { n: g.n, mult: (g.pot || 0) + 1 };
   // 当てはまった人がいた：貯金があれば、その人がまとめて受ける
   if (isHitCard(cv) && g.pot > 0) {
     g.notice = { kind: 'paid', mult: g.pot + 1, n: g.n };

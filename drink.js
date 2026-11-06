@@ -37,7 +37,7 @@ export function drinkKind(text) {
   return MULTI.some((re) => re.test(text)) ? 'multi' : 'solo';
 }
 
-// 記憶：めくったカードの演出。
+// 記憶：めくったカードの演出（当てはまり系はめくった時点では出さない）。
 // card = cardView の結果 / pen = ペナルティの文面 / foot = GENRES の foot / pot = 貯金
 export function kiokuDrink(card, { pen = '一口飲む', foot = null, pot = 0 } = {}) {
   if (!card) return null;
@@ -45,12 +45,18 @@ export function kiokuDrink(card, { pen = '一口飲む', foot = null, pot = 0 } 
   const water = card.g === 'water' || /お水/.test(card.t);
   let kind;
   if (card.id in DRINK_OVERRIDE) kind = DRINK_OVERRIDE[card.id];
-  else if (foot === 'hit') kind = drinkKind(pen) ? 'solo' : null; // 当てはまった人が飲む
+  else if (foot === 'hit') return null; // 当てはまり系は「いた！」を押したときに出す（kiokuHitDrink）
   else kind = drinkKind(card.t.replace(/ペナルティ/g, pen));
   if (!kind) return null;
   if (card.toast) kind = 'multi';
-  const mult = pot > 0 && (foot === 'hit' || card.toast) ? pot + 1 : 1;
+  const mult = pot > 0 && card.toast ? pot + 1 : 1;
   return { kind, water, mult };
+}
+
+// 記憶：当てはまり系で「いた！」を押したときの演出。mult = 貯金込みの倍率
+export function kiokuHitDrink(pen = '一口飲む', mult = 1) {
+  const kind = drinkKind(pen);
+  return kind ? { kind, water: false, mult } : null;
 }
 
 // ババ酒：選ばれたお題の演出。def = odaiOf の結果

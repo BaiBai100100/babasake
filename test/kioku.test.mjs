@@ -157,8 +157,11 @@ test('だれも当てはまらない：貯金は上限なしで溜まり、い�
     assert.equal(s.game.pot, i);
     assert.deepEqual([s.game.notice.kind, s.game.notice.pot], ['stock', i]);
   }
+  // だれもいないときは「いた！」の記録（飲む演出のきっかけ）を残さない
+  assert.equal(s.game.lastHit, undefined);
   // 当てはまった人がいた → 貯金6つぶん込みで7倍、貯金は0に
   step(K.next);
+  assert.deepEqual(s.game.lastHit, { n: s.game.n, mult: 7 });
   assert.equal(s.game.pot, 0);
   assert.deepEqual([s.game.notice.kind, s.game.notice.mult], ['paid', 7]);
   assert.equal(K.penaltyText('一口飲む', s.game.notice.mult), '七口飲む');

@@ -1,4 +1,4 @@
-// 飲む演出：めくった瞬間に、ひとりならグラスひとつ・みんなならグラスふたつ。node test/drink.mjs [URL] [--video]
+// 飲む演出：めくった瞬間（当てはまり系は「いた！」を押した瞬間）に、ひとりならグラスひとつ・みんなならグラスふたつ。node test/drink.mjs [URL] [--video]
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
@@ -36,10 +36,13 @@ await page.click('[data-act="start"]');
 await sleep(800);
 
 const r = {};
-// 1) 当てはまり系 → グラスひとつ
-await inject(['K1-01', 'K1-35', 'K1-33', 'K1-02', 'KW', 'K1-03']);
+// 1) 当てはまり系：めくっただけでは出ない →「いた！」を押したらグラスひとつ
+await inject(['K1-01', 'K1-35', 'K1-33', 'K1-02', 'KW', 'K1-05', 'K1-03']);
 let c0 = await fxCount();
 await page.click('[data-act="kdraw"]');
+await sleep(700);
+r.hitRevealAdded = (await fxCount()) - c0;
+await page.click('[data-act="knext"]');
 await sleep(250); await shot('S1-solo-in');
 r.soloEl = await page.locator('#fx-layer .fx.fx-solo').count();
 await sleep(600); await shot('S2-solo-gulp');
@@ -48,8 +51,6 @@ let s = await st();
 r.solo = { added: s.fx.count - c0, last: s.fx.last };
 await sleep(900);
 r.soloGone = await page.locator('#fx-layer .fx').count();
-await page.click('[data-act="knext"]');
-await sleep(500);
 
 // 2) 飲まないカード → 出ない
 c0 = await fxCount();
@@ -72,15 +73,15 @@ await sleep(1000);
 await page.click('[data-act="knext"]');
 await sleep(500);
 
-// 4) 貯金3つで当てはまり → ×4 のバッジ
+// 4) 貯金3つで当てはまり →「いた！」で ×4 のバッジ
 await inject([], { pot: 3 });
 await page.click('[data-act="kdraw"]');
+await sleep(600);
+await page.click('[data-act="knext"]');
 await sleep(1450); await shot('B1-big-badge');
 s = await st();
 r.big = { last: s.fx.last, badge: (await page.locator('#fx-layer .fx.big .fx-mult').textContent().catch(() => null)) };
 await sleep(800);
-await page.click('[data-act="knext"]');
-await sleep(500);
 
 // 5) チェイサー（お水）→ お水のグラスふたつ
 await page.click('[data-act="kdraw"]');
@@ -90,6 +91,14 @@ r.water = { last: s.fx.last, el: await page.locator('#fx-layer .fx.fx-multi.wate
 await sleep(1200);
 await page.click('[data-act="knext"]');
 await sleep(500);
+
+// 5b) 当てはまり系で「だれもいない」→ 出ない
+c0 = await fxCount();
+await page.click('[data-act="kdraw"]');
+await sleep(600);
+await page.click('[data-act="knone"]');
+await sleep(800);
+r.noneAdded = (await fxCount()) - c0;
 
 // 6) 効果音オフ（メニュー）→ 鳴らさない・記憶される
 await page.click('[data-act="menu"]');
@@ -101,6 +110,8 @@ r.menuLabelOff = (await page.locator('[data-act="sound"]').textContent())?.trim(
 await page.click('.sheet [data-act="close-sheet"]');
 await sleep(300);
 await page.click('[data-act="kdraw"]');
+await sleep(500);
+await page.click('[data-act="knext"]');
 await sleep(400);
 s = await st();
 r.muted = { last: s.fx.last, stored: await page.evaluate(() => localStorage.getItem('babasake:sound')) };
@@ -122,7 +133,7 @@ r.audio = await page.evaluate(async () => {
 });
 
 console.log(JSON.stringify(r, null, 1));
-const ok = r.soloEl === 1 && r.solo.added === 1 && r.solo.last.kind === 'solo' && r.solo.last.sound === true && r.soloGone === 0
+const ok = r.hitRevealAdded === 0 && r.noneAdded === 0 && r.soloEl === 1 && r.solo.added === 1 && r.solo.last.kind === 'solo' && r.solo.last.sound === true && r.soloGone === 0
   && r.noDrinkAdded === 0
   && r.multiEl === 1 && r.multi.added === 1 && r.multi.last.kind === 'multi'
   && r.big.last.mult === 4 && r.big.badge === '×4'

@@ -5,7 +5,7 @@ import { SUIT_INFO, HEART_NOTE, PENALTY_PRESETS } from './odai.js';
 import { GENRES, PENALTY_CHOICES, PENALTY_CHOICES_HARD } from './kioku-data.js';
 import { CPU_BY_KEY, cpuLine } from './cpus.js';
 import { Room, BROKERS, waitForState } from './net.js';
-import { kiokuDrink, babaDrink, drinkKind } from './drink.js';
+import { kiokuDrink, kiokuHitDrink, babaDrink, drinkKind } from './drink.js';
 import * as FX from './fx.js';
 /* global qrcode */
 
@@ -277,6 +277,8 @@ function drinkOf(prev, s) {
   const pg = prev?.game;
   if (!g || !pg || prev.created !== s.created || prev.round !== s.round) return null;
   if (isKioku(s)) {
+    // 当てはまり系は「いた！」が押された瞬間（だれもいないときは出さない）
+    if (g.lastHit && g.lastHit.n !== pg.lastHit?.n) return kiokuHitDrink(kPen(s), g.lastHit.mult);
     if (g.step !== 'card' || !g.card || (pg.step === 'card' && pg.n === g.n)) return null;
     const c = K.currentCard(s);
     return kiokuDrink(c, { pen: kPen(s), foot: GENRES[c.g]?.foot, pot: g.pot || 0 });
