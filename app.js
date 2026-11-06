@@ -258,7 +258,7 @@ function afterStateChange(prev, s) {
   }
   if (g?.chaser && !pg?.chaser) toast('チェイサータイム！ 全員お水を一口', 3500);
   if (isKioku(s) && g?.notice && pg && (!pg.notice || pg.notice.n !== g.notice.n || pg.notice.kind !== g.notice.kind)) {
-    if (g.notice.kind === 'drawer') vibrate([120, 60, 120]);
+    if (g.notice.kind === 'paid') vibrate([120, 60, 120]);
   }
   if (s.phase === 'play' && actorOf(s) === me.id && (!prev || actorOf(prev) !== me.id || prev.phase !== 'play')) vibrate([70, 40, 70]);
   document.title = s.phase === 'play' && actorOf(s) === me.id && !ui.local ? '● あなたの番｜NOMIKAI CARDS' : 'NOMIKAI CARDS';
@@ -626,13 +626,14 @@ function topBar() {
   const netLabel = ui.local || ui.net === 'online' ? '' : '<span class="net bad">再接続中…</span>';
   const chips = [];
   if (g && s.phase === 'play') {
+    // 貯金は上限なしで増えるので、ルールの長いチップに押し出されないよう先頭に出す
+    if (isKioku(s) && g.pot) chips.push(`<span class="chip pot">貯金 ${potDots(g.pot)}</span>`);
     if (!isKioku(s)) chips.push(`<span class="chip">${ICON.dir}${g.dir === 1 ? '時計回り' : '反時計回り'}</span>`);
     const rules = isKioku(s) ? g.rules || [] : (g.hard ? g.rules || [] : (g.rule ? [g.rule] : []));
     for (const r of rules) chips.push(`<span class="chip rule">${isKioku(s) ? 'ルール' : '縛り'}：${esc(r.text)}</span>`);
     if (g.double) chips.push('<span class="chip x2c">次のお題 2倍</span>');
     if (g.skip) chips.push(`<span class="chip">スキップ待ち ${g.skip}</span>`);
     if (g.duo) chips.push('<span class="chip">2人モード</span>');
-    if (isKioku(s) && g.pot) chips.push(`<span class="chip pot">貯金 ${potDots(g.pot)}</span>`);
     if (g.hard) {
       const lv = Math.round(drunkLevel(s) * 5);
       chips.push(`<span class="chip hard">泥酔 ${'●'.repeat(lv)}${'○'.repeat(5 - lv)}</span>`);
@@ -879,14 +880,14 @@ function kControls(s) {
 function kPen(s) {
   return s.settings?.penalty || (s.game.hard ? '二口飲む' : '一口飲む');
 }
-const potDots = (n) => `${'●'.repeat(n)}${'○'.repeat(K.POT_MAX - n)}`;
+// 貯金は上限なし：5つまでは●で並べ、それ以上は「●×12」
+const potDots = (n) => (n <= 5 ? '●'.repeat(n) : `●×${n}`);
 
 // だれも当てはまらなかった／貯金を精算したときのお知らせ
 function noticeText(s, nt, html = true) {
   const pen = kPen(s);
   const b = (t) => (html ? `<b>${t}</b>` : `${t}：`);
   if (nt.kind === 'stock') return `${b('だれも当てはまらず')}ペナルティを貯金（${potDots(nt.pot)}）。次に当てはまった人は${K.penaltyText(pen, nt.pot + 1)}`;
-  if (nt.kind === 'drawer') return `${b('だれもいない＆貯金満タン')}引いた${L.nameOf(s, nt.who)}が${K.penaltyText(pen, nt.mult)}！`;
   if (nt.kind === 'paid') return `${b('貯金ぶんまとめて')}当てはまった人が${K.penaltyText(pen, nt.mult)}`;
   return '';
 }
@@ -917,11 +918,9 @@ function viewKioku() {
     const need = !g.committed && (c.need === 'text' || (typeof c.need === 'number' && K.candidates(s, g.turn).length > c.need));
     if (mine && K.isHitCard(c)) {
       const pen = kPen(s);
-      const sub = (g.pot || 0) < K.POT_MAX
-        ? `ペナルティを貯金して次へ（いま${potDots(g.pot || 0)}）`
-        : `貯金満タン → ${nm(g.turn)}が${esc(K.penaltyText(pen, K.POT_MAX + 1))}`;
+      const sub = `貯金して次へ → 次に当てはまった人は${esc(K.penaltyText(pen, (g.pot || 0) + 2))}`;
       action = `<button class="btn primary big" data-act="knext">いた！ 次の人へ</button>
-        <button class="btn stack ${(g.pot || 0) >= K.POT_MAX ? 'danger' : ''}" data-act="knone">だれもいない<small>${sub}</small></button>`;
+        <button class="btn stack" data-act="knone">だれもいない<small>${sub}</small></button>`;
     } else {
       action = mine ? `<button class="btn primary big" data-act="knext" ${need ? 'disabled' : ''}>次の人へ</button>`
         : `<p class="waiting">${nm(g.turn)}が進めます</p>`;
@@ -973,7 +972,7 @@ const RULES_KIOKU = `<h2>記憶無くしちゃダメですか</h2>
   <tr><td>2</td><td>第2弾</td><td>王様・指名・ミニゲーム・暴露</td></tr>
 </table>
 <h3>だれも当てはまらないとき</h3>
-<p class="hint"><b>いなけりゃ貯金、満タンなら私。</b>「だれもいない」を押すとペナルティが1つ貯金されます。次に当てはまった人が出たら、貯金ぶんもまとめて受けます（貯金1つで2倍、2つで3倍）。貯金が2つたまった状態でまただれもいなければ、カードを引いた「私」が3倍を受けて貯金はリセット。</p>`;
+<p class="hint"><b>いなけりゃ貯金、いたら総取り。</b>「だれもいない」を押すとペナルティが1つ貯金されます。貯金に上限はなく、だれも当てはまらないかぎりどんどん溜まります。次に当てはまった人が出たら、貯金ぶんもまとめて受けます（貯金1つで2倍、2つで3倍、5つで6倍…）。受けたら貯金は0に戻ります。</p>`;
 const RULES_COMMON = `<h3>モード</h3>
 <p class="hint"><b>2人モード</b>：参加者がちょうど2人のとき自動で切り替わり、お題が「相手と」「2人で」になります。<br>
 <b>CPU</b>：ロビーの「CPUを呼ぶ」で追加。CPUは自分で引いて、選んで、指名もします。お題の実行は人間が「次へ」を押します。<br>

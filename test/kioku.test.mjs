@@ -134,10 +134,10 @@ test('泥酔モード：泥酔カードが混ざり、12枚ごとにチェイサ
   assert.equal(K.cardView('K1-37', { hard: true }).t, 'とりあえず全員で二口');
 });
 
-test('だれも当てはまらない：貯金→満タンなら私→いたら精算', () => {
+test('だれも当てはまらない：貯金は上限なしで溜まり、いたら総取り', () => {
   let s = K.startGame(room(3, 'k1'), rng(11));
   const hit = KIOKU_CARDS.filter((c) => c.set === 1 && ['match', 'recent', 'late'].includes(c.g)).map((c) => c.id);
-  s.game.deck = [hit[0], hit[1], 'K1-33', hit[2], hit[3], hit[4]];
+  s.game.deck = [hit[0], hit[1], 'K1-33', ...hit.slice(2, 10)];
   s.game.pos = 0;
   const step = (fn) => { s = K.draw(s, s.game.turn); s = fn(s, s.game.turn); };
   step(K.none);
@@ -151,17 +151,20 @@ test('だれも当てはまらない：貯金→満タンなら私→いたら�
   assert.throws(() => K.none(s, s.game.turn), /使えません/);
   s = K.next(s, s.game.turn);
   assert.equal(s.game.pot, 2);
-  // 満タンでまた誰もいない → 引いた「私」が3倍、貯金リセット
-  s = K.draw(s, s.game.turn);
-  const drawer = s.game.turn;
-  s = K.none(s, drawer);
-  assert.equal(s.game.pot, 0);
-  assert.deepEqual([s.game.notice.kind, s.game.notice.who, s.game.notice.mult], ['drawer', drawer, 3]);
-  // 貯金1つのあと当てはまった人がいた → 2倍で精算
-  step(K.none);
+  // 旧上限（2つ）を超えても、だれもいなければ溜まり続ける
+  for (let i = 3; i <= 6; i++) {
+    step(K.none);
+    assert.equal(s.game.pot, i);
+    assert.deepEqual([s.game.notice.kind, s.game.notice.pot], ['stock', i]);
+  }
+  // 当てはまった人がいた → 貯金6つぶん込みで7倍、貯金は0に
   step(K.next);
   assert.equal(s.game.pot, 0);
-  assert.deepEqual([s.game.notice.kind, s.game.notice.mult], ['paid', 2]);
+  assert.deepEqual([s.game.notice.kind, s.game.notice.mult], ['paid', 7]);
+  assert.equal(K.penaltyText('一口飲む', s.game.notice.mult), '七口飲む');
+  // また貯金1つから
+  step(K.none);
+  assert.equal(s.game.pot, 1);
 });
 
 test('ペナルティの倍数表示', () => {
@@ -170,6 +173,11 @@ test('ペナルティの倍数表示', () => {
   assert.equal(K.penaltyText('二口飲む', 3), '六口飲む');
   assert.equal(K.penaltyText('一発芸＋一口', 2), '一発芸＋二口');
   assert.equal(K.penaltyText('一発芸', 2), '一発芸を2回');
+  assert.equal(K.penaltyText('一口飲む', 12), '十二口飲む');
+  assert.equal(K.penaltyText('二口飲む', 12), '二十四口飲む');
+  assert.equal(K.penaltyText('二口飲む', 10), '二十口飲む');
+  assert.equal(K.penaltyText('二口飲む', 60), '120口飲む');
+  assert.equal(K.penaltyText('一発芸', 9), '一発芸を9回');
 });
 
 test('2人未満では始められない', () => {

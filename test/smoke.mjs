@@ -60,16 +60,21 @@ for (let i = 0; i < 40; i++) {
       await page.fill('#in-rule', '左手で飲む');
       await page.click('[data-act="kcommit"]');
     }
-    if (await page.locator('[data-act="knone"]').count() && nones < 3) {
+    // 貯金は上限なし：旧上限（2つ）を超えて5つまで溜める
+    if (await page.locator('[data-act="knone"]').count() && nones < 5) {
       nones++;
-      if (nones === 3) await shot('20-kioku-none-full');
+      if (nones === 5) await shot('20-kioku-pot-4');
       await page.click('[data-act="knone"]');
       await sleep(350);
-      if (nones === 3) { await shot('21-kioku-notice-drawer'); console.log('pot after full none', (await st()).pot, JSON.stringify((await st()).notice)); }
+      if (nones === 5) { await shot('21-kioku-notice-stock5'); console.log('pot after 5 nones', (await st()).pot, JSON.stringify((await st()).notice)); }
       continue;
     }
-    if (await page.locator('[data-act="knext"]:not([disabled])').count()) await page.click('[data-act="knext"]');
-    else await sleep(1200);
+    if (await page.locator('[data-act="knext"]:not([disabled])').count()) {
+      await page.click('[data-act="knext"]');
+      await sleep(350);
+      const after = await st();
+      if (after.notice?.kind === 'paid' && !seen.has('paid')) { seen.add('paid'); await shot('22-kioku-notice-paid'); console.log('paid', JSON.stringify(after.notice), 'pot', after.pot); }
+    } else await sleep(1200);
   }
 }
 await shot('11-kioku-drunk-late');

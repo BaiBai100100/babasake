@@ -3,18 +3,24 @@ import { KIOKU_CARDS, KIOKU_BY_ID, HARD_CARDS, WATER_CARD, WATER_EVERY, GENRES }
 import { shuffle, nameOf } from './logic.js';
 
 export const MIN_PLAYERS = 2;
-// だれも当てはまらないときの貯金（キャリーオーバー）の上限。満タンでまた誰もいなければ「私」が受ける
-export const POT_MAX = 2;
+// だれも当てはまらないときの貯金（キャリーオーバー）は上限なし。次に当てはまった人が全部受ける
 export const isHitCard = (c) => !!c && GENRES[c.g]?.foot === 'hit';
 
 const KANJI = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
-// ペナルティを倍にした文面（一口×3 → 三口、一発芸×2 → 一発芸を2回）
+// 99までは漢数字（十二、二十四）、それより上は算用数字
+function kanjiNum(n) {
+  if (n <= 10) return KANJI[n];
+  if (n >= 100) return String(n);
+  const t = Math.floor(n / 10), o = n % 10;
+  return `${t > 1 ? KANJI[t] : ''}十${o ? KANJI[o] : ''}`;
+}
+// ペナルティを倍にした文面（一口×3 → 三口、二口×12 → 二十四口、一発芸×2 → 一発芸を2回）
 export function penaltyText(pen, mult = 1) {
   if (mult <= 1) return pen;
   const m = pen.match(/([一二三四五六七八九十])口/);
   if (m) {
     const n = KANJI.indexOf(m[1]) * mult;
-    return pen.replace(m[0], `${n <= 10 ? KANJI[n] : n}口`);
+    return pen.replace(m[0], `${kanjiNum(n)}口`);
   }
   return `${pen}を${mult}回`;
 }
@@ -164,24 +170,16 @@ export function next(s0, pid) {
   return advance(s, pid);
 }
 
-// だれも当てはまらなかった：貯金する。満タンならカードを引いた「私」が受ける
+// だれも当てはまらなかった：貯金する（上限なし。どんどん溜まる）
 export function none(s0, pid) {
   const s = clone(s0);
   const g = s.game;
   if (g?.step !== 'card') fail('いまはカードの場面ではありません');
   if (g.turn !== pid) fail('進めるのはカードを引いた人です');
   if (!isHitCard(cardView(g.card, g))) fail('このカードでは使えません');
-  g.pot = g.pot || 0;
-  if (g.pot < POT_MAX) {
-    g.pot++;
-    g.notice = { kind: 'stock', pot: g.pot, n: g.n };
-    log(s, `だれも当てはまらず、ペナルティを貯金（${g.pot}つ）`);
-  } else {
-    const mult = g.pot + 1;
-    g.notice = { kind: 'drawer', who: pid, mult, n: g.n };
-    g.pot = 0;
-    log(s, `だれも当てはまらず貯金満タン → ${nameOf(s, pid)}が×${mult}`);
-  }
+  g.pot = (g.pot || 0) + 1;
+  g.notice = { kind: 'stock', pot: g.pot, n: g.n };
+  log(s, `だれも当てはまらず、ペナルティを貯金（${g.pot}つ）`);
   return advance(s, pid);
 }
 
