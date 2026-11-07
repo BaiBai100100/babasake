@@ -89,3 +89,14 @@ test('2ラウンド目はテーマが変わる', () => {
   assert.notEqual(a.game.theme, b.game.theme);
   assert.equal(b.round, 2);
 });
+
+test('テーマの引き直し：何も起きていない間だけ、別のテーマに', () => {
+  let s = T.startGame(room(3), () => 0);
+  const before = s.game.theme;
+  s = T.rerollTheme(s, () => 0);
+  assert.notEqual(s.game.theme, before);
+  assert.equal(s.game.rerolls, 1);
+  const g = s.game;
+  s = T.accuse(s, 'p0', 'p1', g.options.p1.find((x) => x !== g.missions.p1));
+  assert.throws(() => T.rerollTheme(s), /変えられません/);
+});

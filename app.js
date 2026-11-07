@@ -284,6 +284,10 @@ function afterStateChange(prev, s) {
     // 文面は画面のお知らせに出るので、トーストは出さない（結果画面にかぶるため）
     vibrate([90, 50, 90]);
   }
+  if (isTalk(s) && g && pg && prev.round === s.round && (g.rerolls || 0) !== (pg.rerolls || 0)) {
+    toast(`テーマが変わった：「${T.themeText(g)}」`, 2600);
+    FX.playSounds([['pop', 0], ['pop', 0.12]]);
+  }
   if (isKioku(s) && g?.notice && pg && (!pg.notice || pg.notice.n !== g.notice.n || pg.notice.kind !== g.notice.kind)) {
     if (g.notice.kind === 'paid' || g.notice.kind === 'kanpai') vibrate([120, 60, 120]);
   }
@@ -911,9 +915,18 @@ function endOverlay() {
   return `<div class="overlay end ${g.step === 'penalty' ? 'deciding' : ''}" role="dialog" aria-label="結果">
     <figure class="result-art ${fl.cls}" style="${fl.style}"><img src="img/result.webp" alt=""></figure>
     <h2 class="loser-name">${loser ? `${nm(loser)}の負け！` : '終了'}</h2>
+    ${lossTally(s)}
     <ol class="ranking">${ranking}</ol>
     ${body}
   </div>`;
+}
+
+// 通算の負け数（2回目のゲームから出す）
+function lossTally(s) {
+  const rows = s.players.map((p) => [p, L.lossesOf(s, p.id)]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  if (!rows.length || (s.round || 1) < 2) return '';
+  const top = rows[0][1];
+  return `<p class="loss-tally"><span>通算</span>${rows.map(([p, n]) => `<b class="${n === top && n > 1 ? 'worst' : ''}">${esc(p.name)} ${n}敗</b>`).join('')}</p>`;
 }
 
 function viewBaba() {
@@ -1084,7 +1097,8 @@ function viewTalk() {
   }
   return `${seatStrip()}
     <section class="k-stage t-stage">
-      <article class="t-theme"><img src="img/t-theme.webp" alt=""><div><span class="k-genre">トークテーマ</span><p class="t-theme-text">${esc(T.themeText(g))}</p></div></article>
+      <article class="t-theme"><img src="img/t-theme.webp" alt=""><div><span class="k-genre">トークテーマ</span><p class="t-theme-text">${esc(T.themeText(g))}</p>
+        ${isHost() && g.step === 'talk' && !g.n ? '<button class="t-reroll" data-act="treroll">別のテーマにする</button>' : ''}</div></article>
       ${timer}${nt}${mission}
     </section>
     <section class="k-actions"><div class="k-act-main">${action}</div></section>
@@ -1449,6 +1463,7 @@ function handle(act, d) {
       commit((x) => T.accuse(x, by, target, Number(d.m)));
       break;
     }
+    case 'treroll': commit((x) => T.rerollTheme(x)); break;
     case 'tend': ui.sheet = null; if (confirm('このラウンドを勝者なしで終えますか？')) commit((x) => T.endRound(x)); break;
     case 'become-host': ui.sheet = null; commit((x) => L.makeHost(x, me.id)); toast('あなたがホストになりました'); break;
     case 'lobby-confirm': ui.sheet = null; if (confirm('ゲームを中断してロビーに戻りますか？')) commit((x) => L.backToLobby(x)); break;

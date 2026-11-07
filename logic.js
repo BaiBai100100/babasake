@@ -178,6 +178,9 @@ function finishCheck(s, pids) {
   }
 }
 
+// 通算の負け数（同じ部屋でラウンドをまたいで残る）
+export const lossesOf = (s, pid) => s.losses?.[pid] || 0;
+
 function endCheck(s) {
   const g = s.game;
   const act = activePlayers(s);
@@ -186,6 +189,7 @@ function endCheck(s) {
   g.turn = null;
   g.pair = null;
   g.step = 'penalty';
+  if (g.loser) s.losses = { ...(s.losses || {}), [g.loser]: lossesOf(s, g.loser) + 1 };
   if (g.loser) log(s, `${nameOf(s, g.loser)}の手にJOKER。負け！`);
   return true;
 }

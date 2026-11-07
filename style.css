@@ -728,3 +728,10 @@ body.fx-shake-strong .game { animation: fx-shake-strong 0.42s linear; }
 
 .t-wins { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 900; padding: 0 6px; border-radius: 6px; background: var(--blue); color: var(--paper-2); }
 .t-mission small, .t-mission b, .t-theme-text { word-break: auto-phrase; }
+
+.t-reroll { margin-top: 6px; border: 2px solid var(--ink); border-radius: 999px; background: var(--paper-2); font: inherit; font-size: 12px; font-weight: 900; padding: 3px 12px; cursor: pointer; }
+.t-reroll:active { transform: translate(1px, 1px); }
+.loss-tally { margin: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; font-size: 13px; }
+.loss-tally span { font-weight: 900; color: var(--ink-2); }
+.loss-tally b { border: 2px solid var(--ink); border-radius: 999px; padding: 1px 10px; background: var(--paper-2); font-weight: 900; }
+.loss-tally b.worst { background: var(--pink); }

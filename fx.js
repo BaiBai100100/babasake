@@ -243,7 +243,7 @@ export function soundPlan(kind, mult = 1) {
   return base.concat([['drumroll', z], ['clink', hit], ['fanfare', hit], ['cheer', hit + 0.05], ['clink', hit + 0.16]]);
 }
 
-function playSounds(list) {
+export function playSounds(list) {
   if (!fxState.sound) return false;
   const ctx = audio();
   if (!ctx) return false;

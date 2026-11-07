@@ -245,3 +245,14 @@ test('ロビー：並べ替え・退出・ホスト交代', () => {
   s = L.addPlayer(s, { id: 'p1', name: '改名' });
   assert.equal(s.players.find((p) => p.id === 'p1').name, '改名');
 });
+test('通算の負け数：同じ部屋で3ゲーム遊ぶと、合計3敗になる', () => {
+  const rng = mulberry32(77);
+  let s = lobby(4);
+  for (let round = 0; round < 3; round++) {
+    s = L.startGame(s, rng);
+    while (s.phase === 'play') s = L.applyAction(s, L.autoAction(s, rng), rng);
+    assert.equal(L.lossesOf(s, s.game.loser) >= 1, true);
+  }
+  const total = s.players.reduce((a, p) => a + L.lossesOf(s, p.id), 0);
+  assert.equal(total, 3);
+});

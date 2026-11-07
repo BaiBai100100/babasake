@@ -91,6 +91,20 @@ export function accuse(s0, by, target, mission) {
   return s;
 }
 
+// テーマの引き直し：だれも達成・見破りをしていない間だけ
+export function rerollTheme(s0, rng = Math.random) {
+  const s = clone(s0);
+  const g = s.game;
+  if (g?.step !== 'talk') fail('いまは会話中ではありません');
+  if (g.n > 0) fail('見破りや達成のあとはテーマを変えられません');
+  let t = Math.floor(rng() * THEMES.length);
+  if (t === g.theme) t = (t + 1) % THEMES.length;
+  g.theme = t;
+  g.rerolls = (g.rerolls || 0) + 1;
+  log(s, `テーマを変更：「${THEMES[t]}」`);
+  return s;
+}
+
 export function timeUp(s0, now = Date.now()) {
   const s = clone(s0);
   const g = s.game;

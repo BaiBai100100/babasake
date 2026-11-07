@@ -42,4 +42,5 @@ node test/fit.mjs http://localhost:8765/   # 記憶のカード画面が全カ�
 node test/heart.mjs http://localhost:8765/ # ババ酒の♥（乾杯タイム）カードの表示
 node test/talk-e2e.mjs http://localhost:8765/ # トークトライアル：3台（見破りハズレ・的中・達成・2ラウンド目）と1台モード
 node test/custom-e2e.mjs http://localhost:8765/ # マイお題：追加・削除・当てはまり型（貯金）と実行型
+node test/tally.mjs http://localhost:8765/ # 通算成績：ババ酒の通算負け数、トークトライアルのテーマ引き直し
 ```
