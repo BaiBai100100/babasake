@@ -54,6 +54,8 @@ for (let i = 0; i < 40; i++) {
   if (s.step === 'card') {
     if (await page.locator('[data-act="kpick"]').count()) {
       const need = await page.evaluate(() => window.__bb.K.currentCard(window.__bb.ui.state).need);
+      // 飲む演出の画面ゆれ（main.game が動く）が終わってから押す。動いている間は Playwright が「不安定」で待ち続ける
+      await page.waitForFunction(() => !document.querySelector('.fx') && !document.querySelector('main.game.fx-shake, main.game.fx-shake-strong'), null, { timeout: 8000 }).catch(() => {});
       for (let k = 0; k < need; k++) await page.click(`[data-act="kpick"] >> nth=${k}`);
       await page.click('[data-act="kcommit"]');
     } else if (await page.locator('#in-rule').count()) {

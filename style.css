@@ -725,3 +725,6 @@ body.fx-shake-strong .game { animation: fx-shake-strong 0.42s linear; }
 .talk-end > * { flex-shrink: 0; }
 .talk-end .result-art { max-width: min(340px, 42vh); }
 @media (max-height: 640px) { .talk-end .result-art { max-width: 200px; } }
+
+.t-wins { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 900; padding: 0 6px; border-radius: 6px; background: var(--blue); color: var(--paper-2); }
+.t-mission small, .t-mission b, .t-theme-text { word-break: auto-phrase; }

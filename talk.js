@@ -42,10 +42,16 @@ export function startGame(s0, rng = Math.random, now = Date.now()) {
   return s;
 }
 
+// 通算の勝ち数（ラウンドをまたいで残る）
+export const winsOf = (s, pid) => s.score?.[pid] || 0;
+
 function finish(s, winner, kind) {
   const g = s.game;
   g.winner = winner;
-  if (winner) g.status[winner] = 'won';
+  if (winner) {
+    g.status[winner] = 'won';
+    s.score = { ...(s.score || {}), [winner]: winsOf(s, winner) + 1 };
+  }
   g.step = 'over';
   s.phase = 'over';
   g.notice = { kind, who: winner, n: ++g.n };

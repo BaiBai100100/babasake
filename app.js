@@ -114,7 +114,9 @@ function iAct() {
   const s = S();
   if (!s) return false;
   const a = actorOf(s);
-  if (ui.local && isKioku(s)) return true;
+  // 1台モードはだれの番でもこの端末で押す。ただし CPU が自分で引く・指名する間はボタンを出さない
+  // （出すと、選んでいる途中で CPU が先に決めてボタンが消える）
+  if (ui.local && isKioku(s)) return !(a && isCpu(a) && !humanStepForCpu());
   if (a === me.id) return true;
   if (isHost() && ui.proxy) return true;
   if (a && isCpu(a) && inRoom() && humanStepForCpu()) return true;
@@ -735,7 +737,9 @@ function seatStrip() {
     const items = s.players.map((p) => {
       const stt = g.status[p.id];
       const badge = stt === 'out' ? '<span class="pl-badge">バレた</span>' : stt === 'won' ? '<span class="pl-badge">勝ち</span>' : g.used[p.id] ? '<span class="pl-badge">見破り済</span>' : '';
-      return `<li class="pl ${stt === 'out' ? 'done' : ''} ${stt === 'won' ? 'turn' : ''} ${p.id === me.id && !ui.local ? 'me' : ''}">${avatar(p, 's')}<span class="pl-name">${esc(p.name)}</span>${badge}</li>`;
+      const w = T.winsOf(s, p.id);
+      const wins = w ? `<span class="pl-count">${w}勝</span>` : '';
+      return `<li class="pl ${stt === 'out' ? 'done' : ''} ${stt === 'won' ? 'turn' : ''} ${p.id === me.id && !ui.local ? 'me' : ''}">${avatar(p, 's')}<span class="pl-name">${esc(p.name)}</span>${badge || wins}</li>`;
     });
     return `<ul class="strip" data-scroll="strip">${items.join('')}</ul>`;
   }
@@ -1104,7 +1108,8 @@ function talkEnd() {
   const rows = s.players.map((p) => {
     const stt = g.status[p.id];
     const label = stt === 'won' ? '勝ち' : stt === 'out' ? 'バレた' : '';
-    return `<li class="t-row ${stt}">${avatar(p, 's')}<div><b>${esc(p.name)}</b>${label ? `<span class="t-st">${label}</span>` : ''}<p>${esc(T.missionText(g.missions[p.id]))}</p></div></li>`;
+    const w = T.winsOf(s, p.id);
+    return `<li class="t-row ${stt}">${avatar(p, 's')}<div><b>${esc(p.name)}</b>${label ? `<span class="t-st">${label}</span>` : ''}${w ? `<span class="t-wins">通算${w}勝</span>` : ''}<p>${esc(T.missionText(g.missions[p.id]))}</p></div></li>`;
   }).join('');
   return `<div class="overlay end talk-end" role="dialog" aria-label="結果">
     <figure class="result-art ${fl.cls}" style="${fl.style}"><img src="img/${g.winner ? 't-win' : 't-busted'}.webp" alt=""></figure>

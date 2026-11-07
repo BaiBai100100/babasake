@@ -72,6 +72,17 @@ test('達成で即終了／時間切れ／ホストが終える', () => {
   assert.equal(u.phase, 'over');
 });
 
+test('通算の勝ち数はラウンドをまたいで増える', () => {
+  let s = T.startGame(room(3), rng(21));
+  s = T.achieve(s, 'p1');
+  s = T.startGame(s, rng(22));
+  s = T.achieve(s, 'p1');
+  s = T.startGame(s, rng(23));
+  s = T.endRound(s);
+  assert.equal(T.winsOf(s, 'p1'), 2);
+  assert.equal(T.winsOf(s, 'p0'), 0);
+});
+
 test('2ラウンド目はテーマが変わる', () => {
   const a = T.startGame(room(3), () => 0);
   const b = T.startGame(a, () => 0);

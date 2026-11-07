@@ -90,6 +90,9 @@ const t1 = ss[0].theme;
 await pa.click('[data-act="again"]');
 ss = await waitAll(pages, (s) => s.phase === 'play' && s.round === 2, '2ラウンド目');
 console.log('2ラウンド目はテーマが変わる:', ss[0].theme !== t1);
+await sleep(500);
+console.log('通算の勝ち数が席に出る（はる 1勝）:', (await pc.locator('.strip .pl-count', { hasText: '1勝' }).count()) === 1);
+await shot(pc, '07b-round2-wins');
 for (const p of pages) await p.context().close();
 
 // ===== 1台モード =====
