@@ -161,6 +161,11 @@ function puhaa(ctx, t, out) {
   src.stop(h + 0.7);
   return h + 0.7;
 }
+// ルーレットの「カチッ」
+function tick(ctx, t, out) {
+  tone(ctx, out, { type: 'square', f0: 1700, f1: 1500, t, a: 0.002, d: 0.035, peak: 0.07 });
+  return t + 0.05;
+}
 // ハズレのブザー「ブッブー」
 function buzz(ctx, t, out) {
   tone(ctx, out, { type: 'square', f0: 196, f1: 180, t, a: 0.005, d: 0.2, peak: 0.13 });
@@ -234,7 +239,37 @@ function cheer(ctx, t, out) {
   }
   return t + 1.6;
 }
-export const SOUNDS = { clink, fizz, gulp, puhaa, pop, drumroll, fanfare, cheer, buzz };
+export const SOUNDS = { clink, fizz, gulp, puhaa, pop, drumroll, fanfare, cheer, buzz, tick };
+
+// 罰ゲームルーレット：だんだん遅くなって items[at] で止まる。全体の長さ（ms）を返す
+export function playRoulette({ items, at }) {
+  const root = ensureLayer();
+  root.querySelector('.fx-roulette')?.remove();
+  const el = document.createElement('div');
+  el.className = 'fx-roulette';
+  el.innerHTML = '<div class="rl-panel"><span class="rl-title">罰ゲームルーレット</span><div class="rl-window"><b class="rl-item"></b></div></div>';
+  root.appendChild(el);
+  const item = el.querySelector('.rl-item');
+  const show = (i) => { item.textContent = items[i % items.length]; };
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const steps = still ? 0 : items.length * 2 + at; // 2周してから止まる
+  const delays = [];
+  for (let i = 0; i < steps; i++) delays.push(50 + 300 * (i / Math.max(1, steps)) ** 2.6);
+  let t = 0;
+  for (let i = 0; i < steps; i++) {
+    setTimeout(() => { show(i); playSounds([['tick', 0]]); }, t);
+    t += delays[i];
+  }
+  setTimeout(() => {
+    show(at);
+    el.classList.add('landed');
+    playSounds([['fanfare', 0], ['clink', 0.1]]);
+    vibrate([80, 40, 160]);
+  }, t);
+  const total = t + 1400;
+  setTimeout(() => el.remove(), total);
+  return total;
+}
 
 // ババ酒：JOKERを引いた（ドキッ）／引かれた（ホッ）。自分の画面だけに出す。音なし・短め
 export function playJoker(kind) {

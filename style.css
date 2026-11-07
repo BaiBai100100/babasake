@@ -797,3 +797,18 @@ body.fx-shake-strong .game { animation: fx-shake-strong 0.42s linear; }
 .join-box.top { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 10px; border: 2.5px solid var(--ink); border-radius: 16px; padding: 10px 12px; background: var(--paper-2); box-shadow: 4px 4px 0 var(--blue); margin-bottom: 4px; }
 .join-box.top h2 { margin: 0; font-size: 14px; font-weight: 900; flex-basis: 100%; }
 .join-box.top .join-row { flex: 1; }
+
+/* ---------- 罰ゲームルーレット ---------- */
+.roulette-btn { background: var(--pink); }
+.fx-roulette { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(27, 26, 34, 0.45); animation: rl-in 0.25s ease both; }
+.rl-panel { width: min(88vw, 360px); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 16px 18px; border: 4px solid var(--ink); border-radius: 22px; background: var(--paper-2); box-shadow: 8px 8px 0 var(--pink); }
+.rl-title { font-family: var(--display); font-size: 20px; }
+.rl-window { position: relative; width: 100%; min-height: 104px; display: grid; place-items: center; border: 3px solid var(--ink); border-radius: 14px; background: var(--blue); color: var(--paper-2); padding: 10px 14px; overflow: hidden; }
+.rl-window::before, .rl-window::after { content: ''; position: absolute; left: 50%; width: 0; height: 0; border: 10px solid transparent; transform: translateX(-50%); }
+.rl-window::before { top: -2px; border-top-color: var(--pink); }
+.rl-window::after { bottom: -2px; border-bottom-color: var(--pink); }
+.rl-item { font-weight: 900; font-size: 18px; line-height: 1.45; text-align: center; word-break: auto-phrase; text-wrap: balance; }
+.fx-roulette.landed .rl-window { background: var(--pink); color: var(--ink); animation: rl-land 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.fx-roulette.landed .rl-title::after { content: ' 決定！'; color: var(--pink); }
+@keyframes rl-in { from { opacity: 0; } }
+@keyframes rl-land { 0% { transform: scale(0.9); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }

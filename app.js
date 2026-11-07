@@ -317,6 +317,10 @@ function afterStateChange(prev, s) {
   if (isKioku(s) && g?.notice && pg && (!pg.notice || pg.notice.n !== g.notice.n || pg.notice.kind !== g.notice.kind)) {
     if (g.notice.kind === 'paid' || g.notice.kind === 'kanpai') vibrate([120, 60, 120]);
   }
+  // 罰ゲームルーレット：全員の画面で回して、飲む演出はそのあと
+  if (g && pg && !isKioku(s) && !isChat(s) && g.step === 'over' && pg.step === 'penalty' && g.roulette && prev.round === s.round) {
+    stampDelay = FX.playRoulette(g.roulette);
+  }
   const drink = drinkOf(prev, s);
   if (drink && stampDelay) setTimeout(() => FX.playDrink(drink), stampDelay);
   else if (drink) FX.playDrink(drink);
@@ -570,7 +574,8 @@ function cpuAct() {
   const act = isKioku(s) ? K.autoAction(s) : L.autoAction(s);
   if (!act) return;
   if (act.type === 'commit' && act.input?.text) act.input.text = ['語尾に「ピヨ」', '乾杯は英語で', 'あだ名で呼び合う'][Math.floor(Math.random() * 3)];
-  if (act.type === 'penalty') act.text = PENALTY_PRESETS[Math.floor(Math.random() * PENALTY_PRESETS.length)];
+  // CPU が罰ゲームを決めるときは、いつもルーレット（見ていて楽しいので）
+  if (act.type === 'penalty') { act.roulette = L.makeRoulette(); act.text = act.roulette.items[act.roulette.at]; }
   commit((x) => (isKioku(x) ? K.applyAction(x, act) : L.applyAction(x, act)));
 }
 
@@ -945,12 +950,13 @@ function endOverlay() {
       body = `<p class="ov-ask">1番に上がったあなたが、${nm(loser)}の罰ゲームを決める</p>
         <div class="preset">${PENALTY_PRESETS.map((t) => `<button class="pick sm ${ui.penaltyText === t ? 'on' : ''}" data-act="preset" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div>
         <label class="field"><span>自分で書く</span><input id="in-pen" data-model="penaltyText" maxlength="60" value="${esc(ui.penaltyText)}" placeholder="罰ゲームを入力"></label>
-        <button class="btn primary" data-act="penalty" ${ui.penaltyText.trim() ? '' : 'disabled'}>これに決定</button>`;
+        <button class="btn primary" data-act="penalty" ${ui.penaltyText.trim() ? '' : 'disabled'}>これに決定</button>
+        <button class="btn stack roulette-btn" data-act="pen-roulette">ルーレットで決める<small>全員のスマホで回ります</small></button>`;
     } else {
       body = `<p class="waiting">1番に上がった${nm(first)}が罰ゲームを考えています</p>${isHost() && !isCpu(first) ? `<button class="btn link proxy" data-act="proxy">${nm(first)}の代わりに決める</button>` : ''}`;
     }
   } else {
-    body = `<div class="penalty"><span>罰ゲーム</span><p>${esc(g.penalty)}</p></div>
+    body = `<div class="penalty"><span>罰ゲーム${g.roulette ? '（ルーレット）' : ''}</span><p>${esc(g.penalty)}</p></div>
       ${loser && isCpu(loser) ? cpuQuotes([loser], g.seq + 1) : ''}
       ${isHost() ? '<div class="end-actions"><button class="btn primary big" data-act="again">同じメンバーでもう一回</button><button class="btn" data-act="lobby">メンバーを変える</button></div>' : '<p class="waiting">ホストが次のゲームを始めるのを待っています</p>'}`;
   }
@@ -1606,6 +1612,12 @@ function handle(act, d) {
     case 'finish-drank': if (iAct()) commit((x) => L.finishOdai(x, who, Math.random, { drank: true })); break;
     case 'preset': ui.penaltyText = d.t; render(); break;
     case 'penalty': if (iAct()) commit((x) => L.setPenalty(x, who, ui.penaltyText)); break;
+    case 'pen-roulette': {
+      if (!iAct()) break;
+      const r = L.makeRoulette();
+      commit((x) => L.setPenalty(x, who, r.items[r.at], { roulette: r }));
+      break;
+    }
     case 'again': ui.penaltyText = ''; ui.showMission = false; commit((x) => startFor(x)); break;
     case 'lobby': commit((x) => L.backToLobby(x)); break;
     case 'card': ui.sheet = { type: 'card', card: d.card }; render(); break;

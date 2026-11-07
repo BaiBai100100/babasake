@@ -256,3 +256,22 @@ test('通算の負け数：同じ部屋で3ゲーム遊ぶと、合計3敗にな
   const total = s.players.reduce((a, p) => a + L.lossesOf(s, p.id), 0);
   assert.equal(total, 3);
 });
+
+test('罰ゲームルーレット：候補8つ・結果は候補の中・state に残る。結果と違う文面は弾く', () => {
+  const rng = mulberry32(5);
+  for (let i = 0; i < 50; i++) {
+    const r = L.makeRoulette(rng);
+    assert.equal(r.items.length, 8);
+    assert.equal(new Set(r.items).size, 8);
+    assert.ok(r.at >= 0 && r.at < 8);
+  }
+  let s = L.startGame(lobby(3), rng);
+  while (s.game.step !== 'penalty') s = L.applyAction(s, L.autoAction(s, rng), rng);
+  const r = L.makeRoulette(rng);
+  const who = L.actorOf(s);
+  assert.throws(() => L.setPenalty(s, who, 'ちがう文面', { roulette: r }), /合いません/);
+  s = L.setPenalty(s, who, r.items[r.at], { roulette: r });
+  assert.equal(s.phase, 'over');
+  assert.deepEqual(s.game.roulette, r);
+  assert.equal(s.game.penalty, r.items[r.at]);
+});

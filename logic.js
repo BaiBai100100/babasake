@@ -1,5 +1,5 @@
 // ゲームの状態遷移（純粋関数）。ブラウザでも Node でも動く。
-import { ODAI, hardText } from './odai.js';
+import { ODAI, hardText, ROULETTE_PENALTIES, ROULETTE_SIZE } from './odai.js';
 import { makeTopic, fillTopic } from './games.js';
 import { CPUS } from './cpus.js';
 
@@ -451,7 +451,13 @@ export function finishOdai(s0, pid, rng = Math.random, opts = {}) {
   return s;
 }
 
-export function setPenalty(s0, pid, text) {
+// 罰ゲームルーレット：全員の画面で同じ並び・同じ結果になるよう、ここで決めて state に入れる
+export function makeRoulette(rng = Math.random) {
+  const items = shuffle(ROULETTE_PENALTIES, rng).slice(0, ROULETTE_SIZE);
+  return { items, at: Math.floor(rng() * items.length) };
+}
+
+export function setPenalty(s0, pid, text, { roulette = null } = {}) {
   const s = clone(s0);
   const g = s.game;
   if (g?.step !== 'penalty') fail('いまは罰ゲームを決める場面ではありません');
@@ -459,9 +465,13 @@ export function setPenalty(s0, pid, text) {
   const t = String(text || '').trim().slice(0, 60);
   if (!t) fail('罰ゲームを入れてください');
   g.penalty = t;
+  if (roulette) {
+    if (roulette.items?.[roulette.at] !== t) fail('ルーレットの結果と罰ゲームが合いません');
+    g.roulette = { items: roulette.items.slice(0, ROULETTE_SIZE), at: roulette.at };
+  }
   g.step = 'over';
   s.phase = 'over';
-  log(s, `罰ゲーム：${t}`);
+  log(s, `罰ゲーム${roulette ? '（ルーレット）' : ''}：${t}`);
   return s;
 }
 
@@ -496,7 +506,7 @@ export function applyAction(s, a, rng = Math.random) {
     case 'choose': return choose(s, a.pid, a.card);
     case 'commit': return commitOdai(s, a.pid, a.input, rng);
     case 'finish': return finishOdai(s, a.pid, rng, { drank: !!a.drank });
-    case 'penalty': return setPenalty(s, a.pid, a.text);
+    case 'penalty': return setPenalty(s, a.pid, a.text, { roulette: a.roulette || null });
     default: throw new Error('unknown action ' + a.type);
   }
 }
