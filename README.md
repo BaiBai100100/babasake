@@ -33,5 +33,6 @@ node test/e2e.mjs http://localhost:8765/   # 複数台で通し（ババ酒3人�
 node test/smoke.mjs http://localhost:8765/ # 1台モードで全画面を撮影
 node test/toast.mjs http://localhost:8765/ # 貯金があるときの「全員で乾杯」
 node test/drink.mjs http://localhost:8765/ # 飲む演出（グラスひとつ／ふたつ・効果音オフ）
+node test/drink-timing.mjs http://localhost:8765/ # ポーズ勝負：確定前は出さない・飲んだ／セーフ・2端末同期・再読込・3画面サイズ
 node test/fx-preview.mjs http://localhost:8765/ # 飲む演出のコマ送り＋音つきプレビュー動画（ffmpeg）
 ```

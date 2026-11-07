@@ -423,7 +423,8 @@ export function commitOdai(s0, pid, input = {}, rng = Math.random) {
   return s;
 }
 
-export function finishOdai(s0, pid, rng = Math.random) {
+// opts.drank：勝負・条件つきのお題で「飲んだ！」を押した（飲む演出のきっかけ）
+export function finishOdai(s0, pid, rng = Math.random, opts = {}) {
   let s = s0;
   if (s.game?.step !== 'odai') fail('いまはお題の場面ではありません');
   if (!s.game.pair.committed) s = commitOdai(s, pid, {}, rng);
@@ -431,6 +432,7 @@ export function finishOdai(s0, pid, rng = Math.random) {
   const g = s.game;
   if (g.pair.by !== pid) fail('お題を進めるのはペアを作った人です');
   const by = g.pair.by;
+  if (opts.drank) g.lastDrink = { seq: g.seq, id: g.pair.chosen, mult: g.pair.double ? 2 : 1 };
   g.pair = null;
   // 泥酔モードは8ペアごとにチェイサータイム
   if (g.hard && g.pairs % 8 === 0) { g.chaser = true; log(s, 'チェイサータイム：全員お水を一口'); }
@@ -471,7 +473,7 @@ export function autoAction(s, rng = Math.random) {
       if (need === 'text') input.text = 'テストの縛り';
       return { type: 'commit', pid: actor, input };
     }
-    return { type: 'finish', pid: actor };
+    return { type: 'finish', pid: actor, drank: rng() < 0.6 };
   }
   if (g.step === 'penalty') return { type: 'penalty', pid: actor, text: 'モノマネを1つ全力で' };
   return null;
@@ -482,7 +484,7 @@ export function applyAction(s, a, rng = Math.random) {
     case 'draw': return draw(s, a.pid, a.index, rng);
     case 'choose': return choose(s, a.pid, a.card);
     case 'commit': return commitOdai(s, a.pid, a.input, rng);
-    case 'finish': return finishOdai(s, a.pid, rng);
+    case 'finish': return finishOdai(s, a.pid, rng, { drank: !!a.drank });
     case 'penalty': return setPenalty(s, a.pid, a.text);
     default: throw new Error('unknown action ' + a.type);
   }

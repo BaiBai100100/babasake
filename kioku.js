@@ -151,7 +151,8 @@ export function startTimer(s0, pid, now = Date.now()) {
   return s;
 }
 
-export function next(s0, pid) {
+// opts.drank：勝負・条件つきのカードで「飲んだ！」を押した（飲む演出のきっかけ）
+export function next(s0, pid, opts = {}) {
   let s = s0;
   if (s.game?.step === 'card' && !s.game.committed && typeof cardView(s.game.card, s.game).need === 'number') {
     try { s = commit(s, pid, {}); } catch { /* 選ぶ必要がある */ }
@@ -164,6 +165,7 @@ export function next(s0, pid) {
   const cv = cardView(g.card, g);
   // 当てはまり系で「いた！」が押された：飲む演出はこの瞬間に出す（めくった時点ではまだ決まっていない）
   if (isHitCard(cv)) g.lastHit = { n: g.n, mult: (g.pot || 0) + 1 };
+  else if (opts.drank) g.lastDrink = { n: g.n, card: g.card };
   // 当てはまった人がいた：貯金があれば、その人がまとめて受ける
   if (isHitCard(cv) && g.pot > 0) {
     g.notice = { kind: 'paid', mult: g.pot + 1, n: g.n };
@@ -231,7 +233,8 @@ export function autoAction(s, rng = Math.random) {
       return { type: 'commit', pid, input: { picks: cands.slice(0, c.need) } };
     }
     if (isHitCard(currentCard(s)) && rng() < 0.3) return { type: 'none', pid };
-    return { type: 'next', pid };
+    // CPU は勝負に負けることもある（飲む演出が出るのは勝負・条件つきの飲むカードのときだけ）
+    return { type: 'next', pid, drank: rng() < 0.6 };
   }
   return null;
 }
@@ -239,7 +242,7 @@ export function autoAction(s, rng = Math.random) {
 export function applyAction(s, a, rng = Math.random) {
   if (a.type === 'draw') return draw(s, a.pid);
   if (a.type === 'commit') return commit(s, a.pid, a.input);
-  if (a.type === 'next') return next(s, a.pid);
+  if (a.type === 'next') return next(s, a.pid, { drank: !!a.drank });
   if (a.type === 'none') return none(s, a.pid);
   if (a.type === 'timer') return startTimer(s, a.pid);
   if (a.type === 'reshuffle') return reshuffle(s, rng);

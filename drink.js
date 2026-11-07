@@ -16,6 +16,11 @@ const MULTI = [
   /私と[^。]{0,10}一緒に/,
 ];
 
+// 勝負・条件つき（負けた方／言えなかったら／外したら…）：だれが飲むかは結果しだいなので、めくった瞬間ではなく
+// 「飲んだ！」を押したときに出す
+const AFTER = /ペナルティ|たら|なら|なければ|ければ|えば|負けた|勝てなかった|勝ち抜けなかった|崩れた|笑った|詰まった|ずれた|かんだ|かぶった|違った|少数派|指された|ほめられた|遅かった|照れた|残った|見せたくない|思い出せない/;
+export const drinkAfter = (text) => !!text && AFTER.test(text);
+
 // 文面だけでは決められないカードの上書き（id → 'solo' | 'multi' | null）
 export const DRINK_OVERRIDE = {
   // 「乾杯の音頭をとる」だけで、飲むのは決まっていない
@@ -50,7 +55,7 @@ export function kiokuDrink(card, { pen = '一口飲む', foot = null, pot = 0 } 
   if (!kind) return null;
   if (card.toast) kind = 'multi';
   const mult = pot > 0 && card.toast ? pot + 1 : 1;
-  return { kind, water, mult };
+  return { kind, water, mult, after: !card.toast && drinkAfter(card.t) };
 }
 
 // 記憶：当てはまり系で「いた！」を押したときの演出。mult = 貯金込みの倍率
@@ -65,5 +70,5 @@ export function babaDrink(id, def, { double = false } = {}) {
   if (def.fx === 'rule' || def.fx === 'rulecustom') return null;
   const kind = id in DRINK_OVERRIDE ? DRINK_OVERRIDE[id] : drinkKind(def.t);
   if (!kind) return null;
-  return { kind, water: /お水/.test(def.t), mult: double ? 2 : 1 };
+  return { kind, water: /お水/.test(def.t), mult: double ? 2 : 1, after: drinkAfter(def.t) };
 }

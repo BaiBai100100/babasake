@@ -49,6 +49,18 @@ test('最初のペアは捨てられ、手札に同じ数字は残らない', ()
   assert.ok(s.game.turn);
 });
 
+test('お題で「飲んだ！」→ lastDrink を残す（セーフなら残さない）', () => {
+  let s = fixedHands(2, { p0: ['S5', 'H2'], p1: ['H6', 'JK', 'D7'] });
+  s = forcePair(s, 'p0', 'S1');
+  const seq = s.game.seq;
+  s = L.finishOdai(s, 'p0', Math.random, { drank: true });
+  assert.deepEqual(s.game.lastDrink, { seq, id: 'S1', mult: 1 });
+  let t = fixedHands(2, { p0: ['S5', 'H2'], p1: ['H6', 'JK', 'D7'] });
+  t = forcePair(t, 'p0', 'S1');
+  t = L.finishOdai(t, 'p0');
+  assert.equal(t.game.lastDrink, undefined);
+});
+
 test('1人では始められない（2人からOK）', () => {
   assert.throws(() => L.startGame(lobby(1)), /2人以上/);
   assert.equal(L.startGame(lobby(2), mulberry32(5)).game.duo, true);

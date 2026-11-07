@@ -157,6 +157,8 @@ test('だれも当てはまらない：貯金は上限なしで溜まり、い�
     assert.equal(s.game.pot, i);
     assert.deepEqual([s.game.notice.kind, s.game.notice.pot], ['stock', i]);
   }
+  // 勝負・条件つきでない飲まないカード（K1-37 は通過済み）では「飲んだ」の記録なし
+  assert.equal(s.game.lastDrink, undefined);
   // だれもいないときは「いた！」の記録（飲む演出のきっかけ）を残さない
   assert.equal(s.game.lastHit, undefined);
   // 当てはまった人がいた → 貯金6つぶん込みで7倍、貯金は0に
@@ -197,6 +199,20 @@ test('貯金があるときに全員で乾杯：分け合わず全員がひと�
   assert.deepEqual(KIOKU_CARDS.filter((c) => c.toast).map((c) => c.id), ['K1-33', 'K1-40', 'K2-06']);
   assert.equal(K.isToastCard(K.cardView('KX-08', { hard: true })), true);
   for (const id of ['K1-33', 'K1-40', 'K2-06', 'KX-08']) assert.match(K.cardView(id, { duo: true }).t, /乾杯/);
+});
+
+test('勝負のカードで「飲んだ！」→ lastDrink を残す（セーフなら残さない）', () => {
+  let s = K.startGame(room(3, 'k1'), rng(3));
+  s.game.deck = ['K1-38', 'K1-38', 'K1-36'];
+  s.game.pos = 0;
+  s = K.draw(s, s.game.turn);
+  s = K.next(s, s.game.turn); // セーフ
+  assert.equal(s.game.lastDrink, undefined);
+  s = K.draw(s, s.game.turn);
+  const n = s.game.n;
+  s = K.next(s, s.game.turn, { drank: true });
+  assert.deepEqual(s.game.lastDrink, { n, card: 'K1-38' });
+  assert.equal(s.game.lastHit, undefined);
 });
 
 test('ペナルティの倍数表示', () => {

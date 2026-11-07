@@ -271,7 +271,7 @@ function afterStateChange(prev, s) {
   if (BOT) scheduleBot();
 }
 
-// 飲むカードがめくられた瞬間（全員の画面で同じ判定）。再接続や読み込み直後（prev なし）は出さない
+// 飲むことが確定した瞬間（全員の画面で同じ判定）。再接続や読み込み直後（prev なし）は出さない
 function drinkOf(prev, s) {
   const g = s?.game;
   const pg = prev?.game;
@@ -279,14 +279,26 @@ function drinkOf(prev, s) {
   if (isKioku(s)) {
     // 当てはまり系は「いた！」が押された瞬間（だれもいないときは出さない）
     if (g.lastHit && g.lastHit.n !== pg.lastHit?.n) return kiokuHitDrink(kPen(s), g.lastHit.mult);
+    // 勝負・条件つきは「飲んだ！」が押された瞬間（セーフなら出さない）
+    if (g.lastDrink && g.lastDrink.n !== pg.lastDrink?.n) {
+      const c = K.cardView(g.lastDrink.card, g);
+      const d = kiokuDrink(c, { pen: kPen(s), foot: GENRES[c.g]?.foot });
+      return d?.after ? d : null;
+    }
     if (g.step !== 'card' || !g.card || (pg.step === 'card' && pg.n === g.n)) return null;
     const c = K.currentCard(s);
-    return kiokuDrink(c, { pen: kPen(s), foot: GENRES[c.g]?.foot, pot: g.pot || 0 });
+    const d = kiokuDrink(c, { pen: kPen(s), foot: GENRES[c.g]?.foot, pot: g.pot || 0 });
+    return d && !d.after ? d : null;
+  }
+  if (g.lastDrink && g.lastDrink.seq !== pg.lastDrink?.seq) {
+    const d = babaDrink(g.lastDrink.id, L.odaiOf(g.lastDrink.id, g), { double: g.lastDrink.mult > 1 });
+    if (d?.after) return d;
   }
   if (g.chaser && !pg.chaser) return { kind: 'multi', water: true, mult: 1 };
   const pr = g.pair;
   if (g.step === 'odai' && pr?.chosen && !(pg.step === 'odai' && pg.seq === g.seq)) {
-    return babaDrink(pr.chosen, L.odaiOf(pr.chosen, g), { double: pr.double });
+    const d = babaDrink(pr.chosen, L.odaiOf(pr.chosen, g), { double: pr.double });
+    return d && !d.after ? d : null;
   }
   // 負けた人の罰ゲームが「飲む」系に決まったとき
   if (g.step === 'over' && pg.step === 'penalty' && g.penalty && drinkKind(g.penalty)) return { kind: drinkKind(g.penalty), water: false, mult: 1 };
@@ -798,7 +810,10 @@ function odaiOverlay() {
       controls = `<label class="field"><span>みんなに守らせる縛り（40字まで）</span><input id="in-rule" data-model="text" maxlength="40" placeholder="例：敬語禁止" value="${esc(ui.text)}"></label>
         <button class="btn primary" data-act="commit">この縛りにする</button>`;
     } else {
-      controls = '<button class="btn primary big" data-act="finish">やった！ 次へ</button>';
+      controls = babaDrink(id, def, { double: pr.double })?.after
+        // 勝負・条件つき：結果が出てから「飲んだ！」で演出
+        ? '<button class="btn primary big" data-act="finish-drank">飲んだ！ 次へ</button><button class="btn stack" data-act="finish">セーフ<small>だれも飲まずに次へ</small></button>'
+        : '<button class="btn primary big" data-act="finish">やった！ 次へ</button>';
     }
   } else {
     controls = `<p class="waiting">${nm(by)}が進めるのを待っています</p>${isHost() && !isCpu(by) ? `<button class="btn link proxy" data-act="proxy">${nm(by)}の代わりに進める</button>` : ''}`;
@@ -951,6 +966,10 @@ function viewKioku() {
       const sub = `貯金して次へ → 次に当てはまった人は${esc(K.penaltyText(pen, (g.pot || 0) + 2))}`;
       action = `<button class="btn primary big" data-act="knext">いた！ 次の人へ</button>
         <button class="btn stack" data-act="knone">だれもいない<small>${sub}</small></button>`;
+    } else if (mine && kiokuDrink(c, { pen: kPen(s), foot: GENRES[c.g]?.foot })?.after) {
+      // 勝負・条件つき：結果が出てから「飲んだ！」で演出
+      action = `<button class="btn primary big" data-act="kdrank" ${need ? 'disabled' : ''}>飲んだ！ 次の人へ</button>
+        <button class="btn stack" data-act="knext" ${need ? 'disabled' : ''}>セーフ<small>だれも飲まずに次へ</small></button>`;
     } else {
       action = mine ? `<button class="btn primary big" data-act="knext" ${need ? 'disabled' : ''}>次の人へ</button>`
         : `<p class="waiting">${nm(g.turn)}が進めます</p>`;
@@ -1191,6 +1210,7 @@ function handle(act, d) {
     case 'pick': ui.picks = togglePick(ui.picks, d.pid, L.needCount(g.pair.chosen)); render(); break;
     case 'commit': if (iAct()) commit((x) => L.commitOdai(x, who, { picks: ui.picks, text: ui.text })); break;
     case 'finish': if (iAct()) commit((x) => L.finishOdai(x, who)); break;
+    case 'finish-drank': if (iAct()) commit((x) => L.finishOdai(x, who, Math.random, { drank: true })); break;
     case 'preset': ui.penaltyText = d.t; render(); break;
     case 'penalty': if (iAct()) commit((x) => L.setPenalty(x, who, ui.penaltyText)); break;
     case 'again': ui.penaltyText = ''; commit((x) => (isKioku(x) ? K.startGame(x) : L.startGame(x))); break;
@@ -1210,6 +1230,7 @@ function handle(act, d) {
     case 'kcommit': if (iAct()) commit((x) => K.commit(x, x.game.turn, { picks: ui.picks, text: ui.text })); break;
     case 'ktimer': commit((x) => K.startTimer(x, x.game.turn)); break;
     case 'knext': if (iAct()) commit((x) => K.next(x, x.game.turn)); break;
+    case 'kdrank': if (iAct()) commit((x) => K.next(x, x.game.turn, { drank: true })); break;
     case 'knone': if (iAct()) commit((x) => K.none(x, x.game.turn)); break;
     case 'kreshuffle': commit((x) => K.reshuffle(x)); break;
     default: break;

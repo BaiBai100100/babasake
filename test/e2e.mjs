@@ -120,7 +120,8 @@ if (!process.env.ONLY_B) {
         } else {
           const key = actorIsCpu ? 'odai-cpu' : 'odai';
           if (!seen.has(key)) { seen.add(key); await sleep(700); await shot(p, actorIsCpu ? 'A7-odai-cpu-pressed-by-human' : 'A6-odai'); }
-          await p.click('[data-act="finish"]', { timeout: 3000 });
+          if (await p.locator('[data-act="finish-drank"]').count()) await p.click('[data-act="finish-drank"]', { timeout: 3000 });
+          else await p.click('[data-act="finish"]', { timeout: 3000 });
         }
       } else if (s.step === 'penalty') {
         await sleep(800);
@@ -141,6 +142,7 @@ if (!process.env.ONLY_B) {
   await sleep(1000);
   await shot(host, 'A9-over');
   console.log('A 全員同じ結果:', fin.every((f) => f.loser === fin[0].loser && f.v === fin[0].v), '負け:', fin[0].players.find((x) => x.id === fin[0].loser)?.name, 'CPUの番を待った回数:', cpuTurns, '見た場面:', [...seen].join(','));
+  console.log('A 飲む演出の回数（各スマホ）:', fin.map((f) => f.fx.count).join(' / '), '全員で出た:', fin.every((f) => f.fx.count > 0));
   for (const p of pages) await p.context().close();
 }
 }
@@ -189,7 +191,9 @@ if (!process.env.ONLY_B) {
         await shot(other, 'B5-none-notice-other');
         continue;
       }
-      await p.click('[data-act="knext"]', { timeout: 4000 });
+      // 勝負・条件つきのカードは「飲んだ！」を押す（飲む演出の同期も見る）
+      if (await p.locator('[data-act="kdrank"]:not([disabled])').count()) await p.click('[data-act="kdrank"]', { timeout: 4000 });
+      else await p.click('[data-act="knext"]', { timeout: 4000 });
       await sleep(300);
     }
   }

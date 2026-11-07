@@ -31,7 +31,7 @@ test('記憶：めくった瞬間は、全員で乾杯はふたつ・飲まな�
   assert.equal(kd('K2-14').kind, 'multi'); // 指名した人と腕を組んで一口
   assert.equal(kd('KX-03'), null); // ルールを足すだけ
   assert.equal(kd('KX-04'), null); // 道連れ（次から）
-  assert.deepEqual(kiokuDrink(K.cardView('KW', {}), { pen: '一口飲む' }), { kind: 'multi', water: true, mult: 1 });
+  assert.deepEqual(kiokuDrink(K.cardView('KW', {}), { pen: '一口飲む' }), { kind: 'multi', water: true, mult: 1, after: false });
 });
 
 test('記憶：「いた！」を押したときの演出（貯金込みの倍率）。ペナルティが飲まない系なら出さない', () => {
@@ -61,9 +61,24 @@ test('ババ酒：お題ごとの判定（縛りは出さない、2倍は×2）'
   assert.equal(bd('S2'), null); // 縛り
   assert.equal(bd('C3'), null); // 効果2倍（次から）
   assert.equal(bd('H1'), null);
-  assert.deepEqual(bd('C11'), { kind: 'multi', water: true, mult: 1 });
+  assert.deepEqual(bd('C11'), { kind: 'multi', water: true, mult: 1, after: false });
   assert.equal(bd('D1', {}, { double: true }).mult, 2);
   assert.equal(bd('C2', { duo: true }).kind, 'multi'); // 2人だとリバースの代わりに乾杯
+});
+
+test('勝負・条件つきは「飲んだ！」を押してから（after）。確実に飲むカードはめくった瞬間', () => {
+  assert.equal(kd('K2-36', {}, { duo: true }).after, true); // 2人でポーズ、崩れた方がペナルティ
+  assert.equal(kd('K1-38').after, true); // じゃんけん
+  assert.equal(kd('K2-33').after, true); // 外したら私がペナルティ
+  assert.equal(kd('K1-34').after, true); // かぶった人同士で乾杯
+  assert.equal(kd('KX-12').after, true); // 言えなかったら全員一口
+  assert.equal(kd('K1-33').after, false); // とりあえず全員で乾杯
+  assert.equal(kd('K1-37').after, false);
+  assert.equal(kd('K2-01').after, false); // 指名して一口飲ませる
+  assert.equal(kd('KX-01').after, false); // 連帯責任
+  const bd = (id, g = {}) => babaDrink(id, L.odaiOf(id, g));
+  for (const id of ['S1', 'S3', 'S5', 'S7', 'S9', 'S11', 'S13', 'H9', 'D5', 'D6']) assert.equal(bd(id).after, true, id);
+  for (const id of ['D1', 'D2', 'D3', 'D4', 'D7', 'D8', 'D9', 'D11', 'D12', 'C11', 'C12']) assert.equal(bd(id).after, false, id);
 });
 
 test('全カードで例外なく判定できる', () => {

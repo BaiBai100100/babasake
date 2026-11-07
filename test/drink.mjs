@@ -1,4 +1,4 @@
-// 飲む演出：めくった瞬間（当てはまり系は「いた！」を押した瞬間）に、ひとりならグラスひとつ・みんなならグラスふたつ。node test/drink.mjs [URL] [--video]
+// 飲む演出：飲む確定時（当てはまり系は「いた！」、勝負・条件つきは「飲んだ！」）に、ひとりならグラスひとつ・みんなならグラスふたつ。node test/drink.mjs [URL] [--video]
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
@@ -37,7 +37,7 @@ await sleep(800);
 
 const r = {};
 // 1) 当てはまり系：めくっただけでは出ない →「いた！」を押したらグラスひとつ
-await inject(['K1-01', 'K1-35', 'K1-33', 'K1-02', 'KW', 'K1-05', 'K1-03']);
+await inject(['K1-01', 'K1-35', 'K1-33', 'K1-02', 'KW', 'K1-05', 'K1-38', 'K1-36', 'K1-03']);
 let c0 = await fxCount();
 await page.click('[data-act="kdraw"]');
 await sleep(700);
@@ -100,6 +100,27 @@ await page.click('[data-act="knone"]');
 await sleep(800);
 r.noneAdded = (await fxCount()) - c0;
 
+// 5c) 勝負のカード（じゃんけん）：めくっただけでは出ない →「飲んだ！」で出る
+c0 = await fxCount();
+await page.click('[data-act="kdraw"]');
+await sleep(800);
+r.contestRevealAdded = (await fxCount()) - c0;
+r.contestButtons = await page.locator('[data-act="kdrank"], [data-act="knext"]').allTextContents();
+await shot('C1-contest-buttons');
+await page.click('[data-act="kdrank"]');
+await sleep(1300); await shot('C2-contest-drank');
+s = await st();
+r.contestDrank = { added: s.fx.count - c0, last: s.fx.last };
+await sleep(900);
+
+// 5d) 勝負のカードで「セーフ」→ 出ない
+c0 = await fxCount();
+await page.click('[data-act="kdraw"]');
+await sleep(600);
+await page.click('[data-act="knext"]');
+await sleep(800);
+r.safeAdded = (await fxCount()) - c0;
+
 // 6) 効果音オフ（メニュー）→ 鳴らさない・記憶される
 await page.click('[data-act="menu"]');
 await sleep(300);
@@ -133,7 +154,8 @@ r.audio = await page.evaluate(async () => {
 });
 
 console.log(JSON.stringify(r, null, 1));
-const ok = r.hitRevealAdded === 0 && r.noneAdded === 0 && r.soloEl === 1 && r.solo.added === 1 && r.solo.last.kind === 'solo' && r.solo.last.sound === true && r.soloGone === 0
+const ok = r.hitRevealAdded === 0 && r.noneAdded === 0 && r.contestRevealAdded === 0 && r.contestDrank.added === 1 && r.contestDrank.last.kind === 'solo' && r.safeAdded === 0
+  && r.contestButtons.some((t) => t.includes('飲んだ！')) && r.contestButtons.some((t) => t.includes('セーフ')) && r.soloEl === 1 && r.solo.added === 1 && r.solo.last.kind === 'solo' && r.solo.last.sound === true && r.soloGone === 0
   && r.noDrinkAdded === 0
   && r.multiEl === 1 && r.multi.added === 1 && r.multi.last.kind === 'multi'
   && r.big.last.mult === 4 && r.big.badge === '×4'
