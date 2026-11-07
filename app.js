@@ -29,31 +29,31 @@ store.set('id', me.id);
 // ---------- ゲームの一覧 ----------
 const GAMES = {
   baba: {
-    kind: 'baba', title: '笑うババには酒来たる', titleHtml: '笑うババには<br>酒来たる', badge: '', img: 'hub-baba', tone: 'paper',
+    kind: 'baba', tags: ['CPUと1人でも', '2人モード'], title: '笑うババには酒来たる', titleHtml: '笑うババには<br>酒来たる', badge: '', img: 'hub-baba', tone: 'paper',
     desc: 'ペアがそろうたびにお題が出るババ抜き。表情の読み合いで盛り上がる', meta: '2〜10人', settings: {},
     steps: ['配って、そろったペアを捨てる', 'となりの人から1枚引く', 'ペアがそろったらお題を実行', '最後にJOKERを持っていた人の負け'],
     localLabel: '1人でCPUと遊ぶ',
   },
   kioku1: {
-    kind: 'kioku', title: '記憶無くしちゃダメですか', titleHtml: '記憶無くしちゃ<br>ダメですか', badge: '第1弾', img: 'hub-kioku1', tone: 'pink',
+    kind: 'kioku', tags: ['1台でもOK', 'CPU', '2人モード'], title: '記憶無くしちゃダメですか', titleHtml: '記憶無くしちゃ<br>ダメですか', badge: '第1弾', img: 'hub-kioku1', tone: 'pink',
     desc: '当てはまった人・直近◯◯した人・全員参加・遅刻ドジ・飲みゲー。元祖の60枚', meta: '2人〜', settings: { deck: 'k1' },
     steps: ['順番にカードを引く（引いた人が「私」）', '書いてあることに従う', '次の人へ'],
     localLabel: 'このスマホ1台で遊ぶ',
   },
   kioku2: {
-    kind: 'kioku', title: '記憶無くしちゃダメですか', titleHtml: '記憶無くしちゃ<br>ダメですか', badge: '第2弾', img: 'hub-kioku2', tone: 'blue',
+    kind: 'kioku', tags: ['1台でもOK', 'CPU', '2人モード'], title: '記憶無くしちゃダメですか', titleHtml: '記憶無くしちゃ<br>ダメですか', badge: '第2弾', img: 'hub-kioku2', tone: 'blue',
     desc: '王様・指名・ミニゲーム・乾杯・飲みゲー。もっと攻めた59枚', meta: '2人〜', settings: { deck: 'k2' },
     steps: ['順番にカードを引く（引いた人が「私」）', '書いてあることに従う', '次の人へ'],
     localLabel: 'このスマホ1台で遊ぶ',
   },
   talk: {
-    kind: 'talk', title: 'トークトライアル', titleHtml: 'トーク<br>トライアル', badge: 'NEW', img: 'hub-talk', tone: 'ink',
+    kind: 'talk', tags: ['1台でもOK'], title: 'トークトライアル', titleHtml: 'トーク<br>トライアル', badge: 'NEW', img: 'hub-talk', tone: 'ink',
     desc: '全員に秘密のミッション。会話をさりげなく誘導して、バレずに達成したら勝ち', meta: '2〜10人', settings: { minutes: 5 },
     steps: ['全員に同じトークテーマと、自分だけの秘密のミッションが届く', 'テーマに沿って自由に会話する', 'ミッションが起きたら「達成！」。怪しい人は「見破る」'],
     localLabel: 'このスマホ1台で遊ぶ（ミッションはこっそり確認）',
   },
   ng: {
-    kind: 'ng', title: 'NGワードゲーム', titleHtml: 'NGワード<br>ゲーム', badge: 'NEW', img: 'hub-ng', tone: 'blue',
+    kind: 'ng', tags: ['各自のスマホ専用'], title: 'NGワードゲーム', titleHtml: 'NGワード<br>ゲーム', badge: 'NEW', img: 'hub-ng', tone: 'blue',
     desc: '自分のNGワードだけ見えない。みんなのスマホには見えている。言ったら一口＆新しいワード', meta: '2〜10人', settings: { minutes: 5 },
     steps: ['全員にNGワード。ほかの人のワードだけが自分のスマホに見える', 'テーマに沿って会話して、相手に言わせる', '言ったら「言った！」→ その人が一口、新しいワードに'],
     localLabel: null,
@@ -597,7 +597,7 @@ function tile(key) {
       <span class="tile-name">${m.titleHtml}</span>
       ${m.badge ? `<span class="tile-badge">${m.badge}</span>` : ''}
       <span class="tile-desc">${esc(m.desc)}</span>
-      <span class="tile-meta">${ICON.people}${m.meta}</span>
+      <span class="tile-tags"><span class="tile-meta">${ICON.people}${m.meta}</span>${(m.tags || []).map((t) => `<span class="tile-meta tag">${t}</span>`).join('')}</span>
     </span>
     <span class="tile-art"><img src="img/${m.img}.webp" alt=""></span>
     <span class="tile-go">${ICON.arrow}</span>
@@ -608,17 +608,17 @@ function viewHome() {
   return `<main class="hub">
     <header class="brand-row"><span class="brand">NOMIKAI<br>CARDS</span><span class="brand-sub">飲み会カードゲーム集<br>（非公式ファンメイド）</span></header>
     <h1 class="hub-title"><span>今夜なに</span><span>遊ぶ？</span></h1>
-    <ul class="tiles">${tile('ng')}${tile('talk')}${tile('baba')}${tile('kioku1')}${tile('kioku2')}</ul>
-    <section class="modes">
-      <div class="mode-card"><img src="img/mode-duo.webp" alt=""><p><b>2人でもOK</b>2人だけになると、お題が2人用に切り替わる</p></div>
-      <div class="mode-card"><img src="img/mode-hard.webp" alt=""><p><b>ゴリゴリ泥酔モード</b>ロビーでON。進むほど画面も酔っていく</p></div>
-    </section>
-    <section class="join-box">
-      <h2>友だちの部屋に入る</h2>
+    <section class="join-box top">
+      <h2>部屋コードをもらった？</h2>
       <div class="join-row">
         <input id="in-code" data-model="code" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="コード4文字" value="${esc(ui.code)}" aria-label="部屋コード">
         <button class="btn" data-act="join-code">参加</button>
       </div>
+    </section>
+    <ul class="tiles">${tile('ng')}${tile('talk')}${tile('baba')}${tile('kioku1')}${tile('kioku2')}</ul>
+    <section class="modes">
+      <div class="mode-card"><img src="img/mode-duo.webp" alt=""><p><b>2人でもOK</b>2人だけになると、お題が2人用に切り替わる</p></div>
+      <div class="mode-card"><img src="img/mode-hard.webp" alt=""><p><b>ゴリゴリ泥酔モード</b>ロビーでON。進むほど画面も酔っていく</p></div>
     </section>
     ${isStandalone() ? '' : `<p class="a2hs">${ICON.share}ホーム画面に追加すると、アプリのように全画面で遊べます<small>${/iPhone|iPad|iPod/.test(navigator.userAgent) ? 'Safari の共有ボタン →「ホーム画面に追加」' : 'ブラウザのメニュー →「ホーム画面に追加」／「アプリをインストール」'}</small></p>`}
     <footer class="fine">市販のカードゲームをもとにした非公式のファンメイドです。お題はすべてオリジナル。<br>お酒は20歳になってから。一気飲みはしない。苦手な人はソフトドリンクで。</footer>
