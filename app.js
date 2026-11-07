@@ -1341,6 +1341,12 @@ function fitStage() {
     st.classList.add(lv);
     squeeze();
   }
+  // fit4 は一気に縮む（リボン・見出しが消え、指名ボタンも小さくなる）ので、下が空いたら絵を戻して埋める
+  if (art && over() < -(ART_MIN + 8)) {
+    st.classList.remove('fit3');
+    squeeze();
+    if (over() > 0) st.classList.add('fit3');
+  }
 }
 // 日本語の書体は文字ごとに後から読み込まれ（新しいカードの漢字など）、そのたびに文字の高さが変わるので合わせ直す
 document.fonts?.ready.then(() => fitStage());
