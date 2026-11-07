@@ -94,7 +94,7 @@ for (const [label, players] of [['2人', ['めふ']], ['3人', ['めふ', 'よ�
     }
     summary.push(`${label} ${w}x${h}: はみ出し ${bad}/${IDS.length}枚, 最大 ${Math.max(0, worst.over)}px (${worst.id}), 絵の最小 ${minArt}px, 文字の最小 ${minFont}px`);
     // 指摘されたカード（30秒以内に誕生日）と、いちばん長いカードを撮る
-    for (const id of ['K2-33', 'K2-16', 'K2-58', 'K1-57']) {
+    for (const id of ['K2-33', 'K2-16', 'K2-58', 'K1-57', 'K1-60', 'K2-59']) {
       await measure(page, id);
       await sleep(900); // めくりアニメと書体の読み込みが終わってから撮る
       await page.screenshot({ path: `${OUT}${label}-${w}x${h}-${id}.png` });

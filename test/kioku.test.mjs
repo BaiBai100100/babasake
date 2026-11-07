@@ -11,15 +11,15 @@ function room(n, deck = 'k1') {
   return s;
 }
 
-test('第1弾は54＋飲みゲー5＝59枚、第2弾は54＋飲みゲー4＝58枚。IDの重複なし・ジャンルは定義済み', () => {
-  assert.equal(KIOKU_CARDS.filter((c) => c.set === 1).length, 59);
-  assert.equal(KIOKU_CARDS.filter((c) => c.set === 2).length, 58);
-  assert.equal(new Set(KIOKU_CARDS.map((c) => c.id)).size, 117);
-  assert.equal(new Set(KIOKU_CARDS.map((c) => c.t)).size, 117, 'お題の文面が重複している');
+test('第1弾は54＋飲みゲー6＝60枚、第2弾は54＋飲みゲー5＝59枚。IDの重複なし・ジャンルは定義済み', () => {
+  assert.equal(KIOKU_CARDS.filter((c) => c.set === 1).length, 60);
+  assert.equal(KIOKU_CARDS.filter((c) => c.set === 2).length, 59);
+  assert.equal(new Set(KIOKU_CARDS.map((c) => c.id)).size, 119);
+  assert.equal(new Set(KIOKU_CARDS.map((c) => c.t)).size, 119, 'お題の文面が重複している');
   for (const c of KIOKU_CARDS) assert.ok(GENRES[c.g], c.id);
-  assert.equal(K.deckFor('k1').length, 59);
-  assert.equal(K.deckFor('k2').length, 58);
-  assert.equal(K.deckFor('mix').length, 117);
+  assert.equal(K.deckFor('k1').length, 60);
+  assert.equal(K.deckFor('k2').length, 59);
+  assert.equal(K.deckFor('mix').length, 119);
 });
 
 test('山札を最後まで引くと end になり、全カードが1回ずつ出る', () => {
@@ -121,7 +121,7 @@ test('2人モード：文面が「相手」「2人で」になり、指名は自
 test('泥酔モード：泥酔カードが混ざり、12枚ごとにチェイサーが入る', () => {
   let s = L.setSettings(room(3, 'k1'), { hard: true });
   s = K.startGame(s, rng(10));
-  assert.equal(K.remaining(s), 59 + 12);
+  assert.equal(K.remaining(s), 60 + 12);
   let waters = 0;
   for (let i = 0; i < 30; i++) {
     s = K.draw(s, s.game.turn);
