@@ -23,8 +23,9 @@ export const BANANA = [
   '温泉', 'たこ焼き', 'サッカー', 'スマホ', 'お正月', 'ディズニーランド', 'ピアノ', '宇宙',
 ];
 
-// どすこいゲームの頭文字（その文字で始まる言葉が多いものだけ）
+// どすこいゲームの頭文字（その文字で始まる言葉が多いものだけ）と文字数（2〜5文字。3・4文字を多めに）
 export const DOSUKOI = [...'あいうえおかきくけこさしすせそたちつてとなにねのはひふへほまみむめもやゆよらりれわ'];
+export const DOSUKOI_LEN = [2, 3, 3, 4, 4, 5];
 
 // あたまおしりゲーム：実在する言葉から「最初の文字」と「最後の文字」を取り出す（答えが必ずある）
 export const ATAMA_WORDS = [
@@ -66,15 +67,16 @@ export const MOZZA = [
 export const GAMES = {
   yamanote: { name: '山手線ゲーム', make: (r) => pick(r, YAMANOTE) },
   banana: { name: 'マジカルバナナ', make: (r) => pick(r, BANANA) },
-  dosukoi: { name: 'どすこいゲーム', make: (r) => pick(r, DOSUKOI) },
-  // どすこい3本勝負：頭文字を3つ続けて決める
+  // どすこい：頭文字と文字数の両方をアプリが決める
+  dosukoi: { name: 'どすこいゲーム', make: (r) => `『${pick(r, DOSUKOI)}』で始まる${pick(r, DOSUKOI_LEN)}文字の言葉` },
+  // どすこい3本勝負：頭文字（3つともちがう文字）と文字数を3回ぶん決める
   dosukoi3: {
     name: 'どすこいゲーム3本勝負',
     make: (r) => {
       const left = [...DOSUKOI];
       const out = [];
-      for (let i = 0; i < 3; i++) out.push(left.splice(Math.floor(r() * left.length) % left.length, 1)[0]);
-      return out.join('」→「');
+      for (let i = 0; i < 3; i++) out.push(`『${left.splice(Math.floor(r() * left.length) % left.length, 1)[0]}』${pick(r, DOSUKOI_LEN)}文字`);
+      return out.join('→');
     },
   },
   atama: {

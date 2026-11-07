@@ -80,9 +80,9 @@ test('泥酔モード：一口が二口になり、縛りは3つまで重なる'
   let s = fixedHands(3, { p0: ['S5'], p1: ['H6', 'JK'], p2: ['S9'] });
   s.game.hard = true;
   assert.match(L.odaiOf('D1', s.game).t, /二口/);
-  for (const id of ['S2', 'S4', 'S6', 'S8']) s = L.commitOdai(forcePair(s, 'p0', id), 'p0');
+  for (const text of ['敬語禁止', 'カタカナ語禁止', '語尾に「ござる」', '左手で飲む']) s = L.commitOdai(forcePair(s, 'p0', 'C13'), 'p0', { text });
   assert.equal(s.game.rules.length, 3);
-  assert.equal(s.game.rules[2].text, 'グラスは利き手と逆の手');
+  assert.equal(s.game.rules[2].text, '左手で飲む');
 });
 
 test('CPUを呼ぶ：順番にキャラが来て、CPU入りでも最後まで遊べる', () => {
@@ -199,10 +199,9 @@ test('大移動：全員が次の人へ1枚渡し、ペアは自動で捨てる'
   checkInvariants(s);
 });
 
-test('縛り：ルールがセットされる／自由入力の縛りは空だと止まる', () => {
+test('縛り：王様ルール（自由入力）だけ。空だと止まる（♠の縛りは飲みゲーに置き換え済み）', () => {
   let s = fixedHands(3, { p0: ['S5'], p1: ['H6', 'JK'], p2: ['S9'] });
-  s = L.commitOdai(forcePair(s, 'p0', 'S2'), 'p0');
-  assert.equal(s.game.rule.text, '語尾に「〜ござる」');
+  for (const id of ['S2', 'S4', 'S6', 'S8', 'S10', 'S12']) assert.ok(L.odaiOf(id, {}).game, id);
   assert.throws(() => L.commitOdai(forcePair(s, 'p0', 'C13'), 'p0', { text: '  ' }), /縛りの内容/);
   s = L.commitOdai(forcePair(s, 'p0', 'C13'), 'p0', { text: '敬語禁止' });
   assert.equal(s.game.rule.text, '敬語禁止');

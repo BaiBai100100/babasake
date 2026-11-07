@@ -32,9 +32,20 @@ test('どのゲームもお題が必ず決まり、出る候補は重複なし',
   assert.equal(new Set(MAJORITY.map((p) => p.join('/'))).size, MAJORITY.length);
 });
 
-test('どすこいの頭文字はひらがな1文字、あたまおしりは実在の言葉から作るので答えが必ずある', () => {
+test('どすこいは頭文字と文字数の両方を決める。あたまおしりは実在の言葉から作るので答えが必ずある', () => {
   for (const c of DOSUKOI) assert.match(c, /^[ぁ-ゖ]$/);
   assert.ok(!DOSUKOI.includes('ん') && !DOSUKOI.includes('を'));
+  const r = seeded(11);
+  const lens = new Set();
+  for (let i = 0; i < 300; i++) {
+    const m = makeTopic('dosukoi', r).text.match(/^『([ぁ-ゖ])』で始まる([2-5])文字の言葉$/);
+    assert.ok(m);
+    lens.add(m[2]);
+    const three = makeTopic('dosukoi3', r).text.match(/^『([ぁ-ゖ])』([2-5])文字→『([ぁ-ゖ])』([2-5])文字→『([ぁ-ゖ])』([2-5])文字$/);
+    assert.ok(three);
+    assert.equal(new Set([three[1], three[3], three[5]]).size, 3, '3本勝負の頭文字はぜんぶちがう');
+  }
+  assert.deepEqual([...lens].sort(), ['2', '3', '4', '5']);
   for (const w of ATAMA_WORDS) assert.match(w, /^[ぁ-ゖ]{2,}$/, w);
   const rng = seeded(7);
   for (let i = 0; i < 200; i++) {
@@ -70,29 +81,30 @@ test('記憶：飲みゲーのカードを引くと、お題がその場で決�
   }
 });
 
-test('ババ酒：♥はぜんぶ飲みゲー。ペアがそろった瞬間にお題が決まり、選ぶ前の2枚にも出る', () => {
-  for (let i = 1; i <= 13; i++) assert.ok(GAMES[ODAI['H' + i].game], `H${i}`);
-  // H3 と D3 のペアがそろう状態を作る
+test('ババ酒：♠の偶数と7は飲みゲー（♥は乾杯のまま）。ペアがそろった瞬間にお題が決まり、選ぶ前の2枚にも出る', () => {
+  for (const id of ['S2', 'S4', 'S6', 'S7', 'S8', 'S10', 'S12']) assert.ok(GAMES[ODAI[id].game], id);
+  for (let i = 1; i <= 13; i++) assert.equal(ODAI['H' + i].game, undefined, `H${i} は乾杯のまま`);
+  // S6（どすこい）と D6 のペアがそろう状態を作る
   let s = L.startGame({ players: [{ id: 'p0', name: 'P0' }, { id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], settings: {}, hostId: 'p0', phase: 'lobby', created: 1 }, seeded(2));
-  s.game.hands = { p0: ['H3', 'S9'], p1: ['D3', 'JK'], p2: ['C9', 'S5'] };
+  s.game.hands = { p0: ['S6', 'S9'], p1: ['D6', 'JK'], p2: ['C9', 'S5'] };
   s.game.turn = 'p0';
   s.game.step = 'draw';
   s.game.dir = 1;
   s = L.draw(s, 'p0', 0, seeded(9));
   assert.equal(s.game.step, 'choose');
-  const tp = s.game.pair.topics.H3;
-  assert.ok(tp?.text);
-  assert.equal(s.game.pair.topics.D3, undefined);
-  assert.ok(L.odaiOf('H3', s.game).t.includes(tp.text));
-  s = L.choose(s, 'p0', 'H3');
-  const def = L.odaiOf('H3', s.game);
+  const tp = s.game.pair.topics.S6;
+  assert.match(tp?.text, /^『[ぁ-ゖ]』で始まる[2-5]文字の言葉$/);
+  assert.equal(s.game.pair.topics.D6, undefined);
+  assert.ok(L.odaiOf('S6', s.game).t.includes(tp.text));
+  s = L.choose(s, 'p0', 'S6');
+  const def = L.odaiOf('S6', s.game);
   assert.equal(def.topic, tp.text);
   assert.ok(!/\{お題\}|？？？/.test(def.t));
-  assert.ok(babaDrink('H3', def).after);
+  assert.ok(babaDrink('S6', def).after);
 });
 
 test('お題が決まる前（古い状態）でも文面は壊れない', () => {
   assert.equal(fillTopic('お題は「{お題}」', null), 'お題は「？？？」');
-  assert.ok(!L.odaiOf('H1', {}).t.includes('{お題}'));
-  assert.ok(!K.cardView('K2-02', {}).t.includes('{お題}'));
+  assert.ok(!L.odaiOf('S2', {}).t.includes('{お題}'));
+  assert.ok(!K.cardView('K1-55', {}).t.includes('{お題}'));
 });

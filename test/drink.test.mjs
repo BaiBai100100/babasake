@@ -58,7 +58,8 @@ test('ババ酒：お題ごとの判定（縛りは出さない、2倍は×2）'
   assert.equal(bd('D4').kind, 'multi');
   assert.equal(bd('D5').kind, 'solo');
   assert.equal(bd('D10'), null);
-  assert.equal(bd('S2'), null); // 縛り
+  assert.equal(bd('S2').after, true); // あたまおしり（もとは縛り）
+  assert.equal(bd('C13'), null); // 王様ルール（縛り）
   assert.equal(bd('C3'), null); // 効果2倍（次から）
   assert.equal(bd('C4'), null); // 交換
   assert.deepEqual(bd('C11'), { kind: 'multi', water: true, mult: 1, after: false });
@@ -91,13 +92,22 @@ test('恋愛のお題はなし。ババ酒の♥は全部「飲む」カード',
   for (let i = 1; i <= 13; i++) {
     for (const duo of [false, true]) assert.ok(babaDrink('H' + i, L.odaiOf('H' + i, { duo })), `H${i} は飲むカード`);
   }
-  // ♥は飲みゲー：負けた人が飲むので、ぜんぶ「飲んだ！」を押してから
-  for (let i = 1; i <= 13; i++) for (const duo of [false, true]) assert.equal(babaDrink('H' + i, L.odaiOf('H' + i, { duo })).after, true, `H${i}`);
-  // 暴露は話すお題なので演出は出さない
-  assert.equal(kd('K2-48'), null);
-  assert.equal(kd('K2-47').after, true); // モッツァレラチーズゲーム
-  assert.equal(kd('K2-22').kind, 'solo'); // あたまおしり：負けた1人が飲む
-  assert.equal(kd('K2-02').after, true); // 山手線：詰まった人が飲む
+  // ♥（乾杯タイム）の中でも、結果しだいのものは「飲んだ！」を押してから
+  for (const id of ['H8', 'H9', 'H10', 'H13']) assert.equal(babaDrink(id, L.odaiOf(id, {})).after, true, id);
+  for (const id of ['H1', 'H3', 'H5', 'H6', 'H11', 'H12']) assert.equal(babaDrink(id, L.odaiOf(id, {})).kind, 'multi', id);
+  // ♠の偶数と7は飲みゲー：負けた人が飲むので「飲んだ！」を押してから
+  for (const id of ['S2', 'S4', 'S6', 'S7', 'S8', 'S10', 'S12']) for (const duo of [false, true]) assert.equal(babaDrink(id, L.odaiOf(id, { duo })).after, true, id);
+  assert.equal(kd('K2-02').kind, 'multi'); // 王様：2人に一口ずつ（飲むだけのカードは残す）
+  assert.equal(kd('K2-22').kind, 'solo'); // 「乾杯」を各国語で言い合う：負けた1人が飲む
+});
+
+test('記憶：エピソードを話すお題（暴露）はなく、かわりに乾杯・飲むお題', () => {
+  assert.equal([...KIOKU_CARDS, ...HARD_CARDS].filter((c) => c.g === 'expose').length, 0);
+  const kanpai = KIOKU_CARDS.filter((c) => c.g === 'kanpai');
+  assert.equal(kanpai.length, 12);
+  for (const duo of [false, true]) for (const c of kanpai) assert.ok(kd(c.id, {}, { duo }), `${c.id} は飲む`);
+  // 結果しだいのもの（いちばん遅かった人・言えなかったら）だけ「飲んだ！」
+  assert.deepEqual(kanpai.filter((c) => kd(c.id).after).map((c) => c.id), ['K2-47', 'K2-51']);
 });
 
 test('全カードで例外なく判定できる', () => {

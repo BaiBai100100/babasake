@@ -1,4 +1,4 @@
-// ババ酒の♥カード（みんなでゲーム：お題はアプリが決める）を大きく表示して撮る。node test/heart.mjs [URL]
+// ババ酒の♥（乾杯タイム）と♠の飲みゲー（お題はアプリが決める）を大きく表示して撮る。node test/heart.mjs [URL]
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
@@ -21,11 +21,11 @@ await page.click('[data-act="start"]');
 await page.waitForTimeout(800);
 await page.addStyleTag({ content: '#fx-layer { display: none !important; }' });
 const out = {};
-for (const id of ['H1', 'H3', 'H8']) {
+for (const id of ['H1', 'S6', 'S12']) {
   await page.evaluate(async (id) => {
     const { makeTopic } = await import('./games.js');
     const { ODAI } = await import('./odai.js');
-    const topics = { [id]: makeTopic(ODAI[id].game) };
+    const topics = ODAI[id].game ? { [id]: makeTopic(ODAI[id].game) } : {};
     window.__bb.commit((s) => {
     const t = structuredClone(s);
     const by = t.players[0].id;
@@ -50,9 +50,12 @@ for (const id of ['H1', 'H3', 'H8']) {
   }));
 }
 console.log(JSON.stringify(out, null, 1));
-// ♥は飲みゲー：お題が出ていて（{お題}・？？？が残っていない）、負けた人が飲むので「飲んだ！／セーフ」
-const ok = Object.values(out).every((o) => o.role === 'みんなでゲーム' && o.note === 0 && o.imgLoaded && o.topic && !/\{お題\}|？？？/.test(o.text) && o.buttons.some((t) => t.includes('飲んだ')) && o.buttons.some((t) => t.includes('セーフ')))
-  && out.H3.topicMarks === 2; // どすこいの頭文字は『〇』と「〇」の2か所だけ光る
-console.log('♥カード:', ok, 'コンソールエラー:', errors.length ? errors : 'なし');
+// ♥は乾杯（すぐ飲む）。♠の偶数は飲みゲー：お題（頭文字と文字数）が出ていて、負けた人が飲むので「飲んだ！／セーフ」
+const game = (o) => o.role === '勝負と飲みゲー' && o.imgLoaded && o.topic && o.topicMarks === 1 && !/\{お題\}|？？？/.test(o.text)
+  && o.buttons.some((t) => t.includes('飲んだ')) && o.buttons.some((t) => t.includes('セーフ'));
+const ok = out.H1.role === '乾杯タイム' && out.H1.imgLoaded && !out.H1.topic && out.H1.buttons.some((t) => t.includes('やった'))
+  && game(out.S6) && /^『[ぁ-ゖ]』で始まる[2-5]文字の言葉$/.test(out.S6.topic)
+  && game(out.S12) && /^(『[ぁ-ゖ]』[2-5]文字→?){3}$/.test(out.S12.topic);
+console.log('♥乾杯・♠飲みゲー:', ok, 'コンソールエラー:', errors.length ? errors : 'なし');
 await browser.close();
 process.exit(ok && !errors.length ? 0 : 1);
