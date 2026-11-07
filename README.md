@@ -18,7 +18,7 @@
 | `logic.js` | ルール（純粋関数。Node でテスト可能） |
 | `odai.js` | ババ酒のお題52枚（2人用文面つき）と罰ゲーム候補 |
 | `kioku.js` / `kioku-data.js` | 記憶のルールとお題117枚＋泥酔カード12枚、マイお題 |
-| `talk.js` / `talk-data.js` | トークトライアルのルールと、トークテーマ36・ミッション55（オリジナル） |
+| `talk.js` / `talk-data.js` | トークトライアルのルールと、トークテーマ50・ミッション80（オリジナル） |
 | `cpus.js` | CPUキャラ6人 |
 | `img/` | 生成画像（webp） |
 | `games.js` | 飲みゲー（山手線・マジカルバナナ・どすこい…）のお題。引いた瞬間にアプリが決める |
@@ -43,4 +43,5 @@ node test/heart.mjs http://localhost:8765/ # ババ酒の♥（乾杯タイム�
 node test/talk-e2e.mjs http://localhost:8765/ # トークトライアル：3台（見破りハズレ・的中・達成・2ラウンド目）と1台モード
 node test/custom-e2e.mjs http://localhost:8765/ # マイお題：追加・削除・当てはまり型（貯金）と実行型
 node test/tally.mjs http://localhost:8765/ # 通算成績：ババ酒の通算負け数、トークトライアルのテーマ引き直し
+node test/stamp.mjs http://localhost:8765/ # トークトライアルのハンコ演出（ハズレ・見破った・達成）と、そのあとの飲む演出
 ```

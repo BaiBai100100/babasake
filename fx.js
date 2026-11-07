@@ -161,6 +161,12 @@ function puhaa(ctx, t, out) {
   src.stop(h + 0.7);
   return h + 0.7;
 }
+// ハズレのブザー「ブッブー」
+function buzz(ctx, t, out) {
+  tone(ctx, out, { type: 'square', f0: 196, f1: 180, t, a: 0.005, d: 0.2, peak: 0.13 });
+  tone(ctx, out, { type: 'square', f0: 147, f1: 120, t: t + 0.24, a: 0.005, d: 0.38, peak: 0.13 });
+  return t + 0.65;
+}
 // 出だしの「ポンッ」
 function pop(ctx, t, out) {
   tone(ctx, out, { f0: 520, f1: 1300, t, a: 0.003, d: 0.09, peak: 0.28, glide: 0.06 });
@@ -228,7 +234,21 @@ function cheer(ctx, t, out) {
   }
   return t + 1.6;
 }
-export const SOUNDS = { clink, fizz, gulp, puhaa, pop, drumroll, fanfare, cheer };
+export const SOUNDS = { clink, fizz, gulp, puhaa, pop, drumroll, fanfare, cheer, buzz };
+
+// でかいハンコ（トークトライアルの「見破った！」「ハズレ！」「ミッション達成！」など）。1.5秒で消える
+export const STAMP_MS = 1500;
+export function playStamp({ text, sub = '', tone = 'pink', sounds = [] } = {}) {
+  const root = ensureLayer();
+  root.querySelector('.fx-stamp')?.remove();
+  const el = document.createElement('div');
+  el.className = `fx-stamp ${tone}`;
+  el.innerHTML = `<div class="st"><b>${text}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
+  root.appendChild(el);
+  playSounds(sounds);
+  vibrate(tone === 'ink' ? [200] : [60, 40, 60, 40, 120]);
+  setTimeout(() => el.remove(), STAMP_MS);
+}
 
 // 鳴らす音の予定表 [名前, 秒]（プレビュー動画も同じ表を使う）
 export function soundPlan(kind, mult = 1) {

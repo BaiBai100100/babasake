@@ -735,3 +735,19 @@ body.fx-shake-strong .game { animation: fx-shake-strong 0.42s linear; }
 .loss-tally span { font-weight: 900; color: var(--ink-2); }
 .loss-tally b { border: 2px solid var(--ink); border-radius: 999px; padding: 1px 10px; background: var(--paper-2); font-weight: 900; }
 .loss-tally b.worst { background: var(--pink); }
+
+/* ---------- でかいハンコ（トークトライアル） ---------- */
+.fx-stamp { position: absolute; inset: 0; display: grid; place-items: center; animation: stamp-veil 1.5s ease both; }
+.fx-stamp::before { content: ''; position: absolute; inset: -20%; background: repeating-conic-gradient(from 0deg, rgba(251, 62, 168, 0.22) 0 8deg, transparent 8deg 20deg); animation: stamp-spin 1.5s linear both; }
+.fx-stamp.ink::before { background: repeating-conic-gradient(from 0deg, rgba(27, 26, 34, 0.16) 0 8deg, transparent 8deg 20deg); }
+.fx-stamp.blue::before { background: repeating-conic-gradient(from 0deg, rgba(28, 60, 194, 0.2) 0 8deg, transparent 8deg 20deg); }
+.fx-stamp .st { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 26px 14px; border: 5px solid var(--ink); border-radius: 18px; background: var(--pink); color: var(--ink); box-shadow: 9px 9px 0 var(--ink); transform: rotate(-7deg); animation: stamp-in 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both, stamp-out 0.28s ease-in 1.2s forwards; text-align: center; max-width: 88vw; }
+.fx-stamp.blue .st { background: var(--blue); color: var(--paper-2); }
+.fx-stamp.ink .st { background: var(--ink); color: var(--pink); border-color: var(--pink); box-shadow: 9px 9px 0 var(--pink); }
+.fx-stamp b { font-family: var(--display); font-weight: 400; font-size: clamp(40px, 13vw, 68px); line-height: 1.1; letter-spacing: 0.02em; }
+.fx-stamp small { font-weight: 900; font-size: 15px; }
+@keyframes stamp-in { 0% { transform: rotate(-7deg) scale(3.2); opacity: 0; } 55% { transform: rotate(-7deg) scale(0.9); opacity: 1; } 100% { transform: rotate(-7deg) scale(1); opacity: 1; } }
+@keyframes stamp-out { to { transform: rotate(-7deg) scale(1.15); opacity: 0; } }
+@keyframes stamp-veil { 0% { background: rgba(247, 239, 227, 0); } 20% { background: rgba(247, 239, 227, 0.55); } 80% { background: rgba(247, 239, 227, 0.55); } 100% { background: rgba(247, 239, 227, 0); } }
+@keyframes stamp-spin { from { transform: rotate(0deg); opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } to { transform: rotate(40deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .fx-stamp::before { animation: none; opacity: 0; } .fx-stamp .st { animation: stamp-out 0.28s ease-in 1.2s forwards; } }

@@ -256,6 +256,7 @@ function commit(fn) {
 }
 
 function afterStateChange(prev, s) {
+  let stampDelay = 0;
   const g = s.game;
   const pg = prev?.game;
   if (s.phase === 'lobby' && ui.wantJoin && !ui.local && !s.players.some((p) => p.id === me.id)) scheduleJoin();
@@ -281,8 +282,9 @@ function afterStateChange(prev, s) {
   }
   if (g?.chaser && !pg?.chaser) toast('チェイサータイム！ 全員お水を一口', 3500);
   if (isTalk(s) && g?.notice && pg && g.notice.n !== pg.notice?.n && prev.round === s.round) {
-    // 文面は画面のお知らせに出るので、トーストは出さない（結果画面にかぶるため）
-    vibrate([90, 50, 90]);
+    // 文面は画面のお知らせに出るので、トーストは出さない（結果画面にかぶるため）。代わりにハンコを押す
+    const st = talkStamp(s, g.notice);
+    if (st) { FX.playStamp(st); stampDelay = FX.STAMP_MS - 250; }
   }
   if (isTalk(s) && g && pg && prev.round === s.round && (g.rerolls || 0) !== (pg.rerolls || 0)) {
     toast(`テーマが変わった：「${T.themeText(g)}」`, 2600);
@@ -292,7 +294,8 @@ function afterStateChange(prev, s) {
     if (g.notice.kind === 'paid' || g.notice.kind === 'kanpai') vibrate([120, 60, 120]);
   }
   const drink = drinkOf(prev, s);
-  if (drink) FX.playDrink(drink);
+  if (drink && stampDelay) setTimeout(() => FX.playDrink(drink), stampDelay);
+  else if (drink) FX.playDrink(drink);
   const myTurn = (x) => x?.phase === 'play' && !isTalk(x) && actorOf(x) === me.id;
   if (myTurn(s) && !myTurn(prev)) vibrate([70, 40, 70]);
   document.title = myTurn(s) && !ui.local ? '● あなたの番｜NOMIKAI CARDS' : 'NOMIKAI CARDS';
@@ -1062,6 +1065,17 @@ function talkNoticeText(s, nt, html = true) {
   if (nt.kind === 'busted') return `${b('見破った！')}${n(nt.by)}が${n(nt.target)}のミッション「${esc(T.missionText(nt.mission))}」を当てた → ${n(nt.target)}は脱落して${pen}`;
   if (nt.kind === 'miss') return `${b('ハズレ！')}${n(nt.by)}の見破りは外れ → ${n(nt.by)}が${pen}`;
   return '';
+}
+
+// 通知ごとのハンコ。名前はエスケープして入れる（ハンコは innerHTML で描く）
+function talkStamp(s, nt) {
+  const n = (pid) => esc(L.nameOf(s, pid));
+  if (nt.kind === 'busted') return { text: '見破った！', sub: `${n(nt.by)} → ${n(nt.target)}`, tone: 'pink', sounds: [['pop', 0], ['clink', 0.08], ['fanfare', 0.12]] };
+  if (nt.kind === 'miss') return { text: 'ハズレ！', sub: `${n(nt.by)}が${talkPen(s)}`, tone: 'ink', sounds: [['buzz', 0]] };
+  if (nt.kind === 'won') return { text: 'ミッション<br>達成！', sub: n(nt.who), tone: 'pink', sounds: [['pop', 0], ['fanfare', 0.08], ['cheer', 0.1]] };
+  if (nt.kind === 'last') return { text: '逃げ切り！', sub: n(nt.who), tone: 'blue', sounds: [['fanfare', 0], ['cheer', 0.05]] };
+  if (nt.kind === 'timeup') return { text: '時間切れ！', sub: `全員で${talkPen(s)}`, tone: 'ink', sounds: [['buzz', 0]] };
+  return null;
 }
 
 function viewTalk() {
