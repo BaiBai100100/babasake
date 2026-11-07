@@ -177,9 +177,12 @@ if (!process.env.ONLY_B) {
       if (i === 2) { await sleep(500); await shot(p, 'B2-card-drawer'); await shot(pages.find((x) => x !== p), 'B2-card-other'); }
       if (await p.locator('[data-act="ktimer"]').count() && !checks.timer) {
         await p.click('[data-act="ktimer"]');
-        await sleep(1500);
+        // 公開の中継サーバー経由なので、相手の画面に届くまで最大6秒待つ（かかった時間も出す）
         const other = pages.find((x) => x !== p);
+        const t0 = Date.now();
+        while (Date.now() - t0 < 6000 && (await other.locator('.timer-num').count()) !== 1) await sleep(150);
         checks.timer = (await other.locator('.timer-num').count()) === 1;
+        checks.timerMs = Date.now() - t0;
       }
       if (await p.locator('#in-rule').count()) { await p.fill('#in-rule', '左手で飲む'); await p.click('[data-act="kcommit"]'); }
       if (!checks.none && await p.locator('[data-act="knone"]').count()) {
@@ -200,7 +203,7 @@ if (!process.env.ONLY_B) {
   await sleep(800);
   const fin = await Promise.all(pages.map(st));
   await shot(host, 'B4-late');
-  console.log('B 2台の状態が一致:', fin[0].v === fin[1].v && fin[0].n === fin[1].n, '引いた枚数:', fin[0].n, '2人用の文面:', checks.duoText, 'タイマー共有:', checks.timer, 'チェイサー:', checks.water, 'だれもいない共有:', checks.none);
+  console.log('B 2台の状態が一致:', fin[0].v === fin[1].v && fin[0].n === fin[1].n, '引いた枚数:', fin[0].n, '2人用の文面:', checks.duoText, 'タイマー共有:', checks.timerMs == null ? '（タイマーのカードが出なかった）' : `${checks.timer} (${checks.timerMs}ms)`, 'チェイサー:', checks.water, 'だれもいない共有:', checks.none);
   // 飲む演出は、めくった人だけでなく相手のスマホにも出る（取りこぼし1回までは許す）
   console.log('B 飲む演出の回数（2台）:', fin.map((x) => x.fx.count).join(' / '), '両方で出た:', fin.every((x) => x.fx.count > 0) && Math.abs(fin[0].fx.count - fin[1].fx.count) <= 1);
 }
