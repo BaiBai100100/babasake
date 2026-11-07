@@ -2,6 +2,7 @@
 import * as L from './logic.js';
 import * as K from './kioku.js';
 import * as T from './talk.js';
+import * as N from './ng.js';
 import { SUIT_INFO, PENALTY_PRESETS } from './odai.js';
 import { GENRES, PENALTY_CHOICES, PENALTY_CHOICES_HARD } from './kioku-data.js';
 import { CPU_BY_KEY, cpuLine } from './cpus.js';
@@ -51,6 +52,12 @@ const GAMES = {
     steps: ['全員に同じトークテーマと、自分だけの秘密のミッションが届く', 'テーマに沿って自由に会話する', 'ミッションが起きたら「達成！」。怪しい人は「見破る」'],
     localLabel: 'このスマホ1台で遊ぶ（ミッションはこっそり確認）',
   },
+  ng: {
+    kind: 'ng', title: 'NGワードゲーム', titleHtml: 'NGワード<br>ゲーム', badge: 'NEW', img: 'hub-ng', tone: 'blue',
+    desc: '自分のNGワードだけ見えない。みんなのスマホには見えている。言ったら一口＆新しいワード', meta: '2〜10人', settings: { minutes: 5 },
+    steps: ['全員にNGワード。ほかの人のワードだけが自分のスマホに見える', 'テーマに沿って会話して、相手に言わせる', '言ったら「言った！」→ その人が一口、新しいワードに'],
+    localLabel: null,
+  },
 };
 const DECK_LABEL = { k1: '第1弾', k2: '第2弾', mix: '第1弾＋第2弾' };
 
@@ -90,9 +97,12 @@ const nm = (pid) => esc(L.nameOf(S(), pid));
 const kindOf = (s = S()) => s?.kind || 'baba';
 const isKioku = (s = S()) => kindOf(s) === 'kioku';
 const isTalk = (s = S()) => kindOf(s) === 'talk';
-const actorOf = (s) => (isKioku(s) ? K.actorOf(s) : isTalk(s) ? s.hostId : L.actorOf(s));
-const minPlayers = (s = S()) => (isKioku(s) ? K.MIN_PLAYERS : isTalk(s) ? T.MIN_PLAYERS : L.MIN_PLAYERS);
-const startFor = (x) => (isKioku(x) ? K.startGame(x) : isTalk(x) ? T.startGame(x) : L.startGame(x));
+const isNg = (s = S()) => kindOf(s) === 'ng';
+// 順番のない会話ゲーム（トークトライアル・NGワード）
+const isChat = (s = S()) => isTalk(s) || isNg(s);
+const actorOf = (s) => (isKioku(s) ? K.actorOf(s) : isChat(s) ? s.hostId : L.actorOf(s));
+const minPlayers = (s = S()) => (isKioku(s) ? K.MIN_PLAYERS : isTalk(s) ? T.MIN_PLAYERS : isNg(s) ? N.MIN_PLAYERS : L.MIN_PLAYERS);
+const startFor = (x) => (isKioku(x) ? K.startGame(x) : isTalk(x) ? T.startGame(x) : isNg(x) ? N.startGame(x) : L.startGame(x));
 const talkPen = (s = S()) => (s?.settings?.hard || s?.game?.hard ? '二口' : '一口');
 const isHost = () => ui.local || S()?.hostId === me.id;
 const inRoom = () => ui.local || !!S()?.players.some((p) => p.id === me.id);
@@ -100,7 +110,7 @@ const actor = () => (S() ? actorOf(S()) : null);
 const cpuOf = (pid) => S()?.players.find((p) => p.id === pid)?.cpu || null;
 const isCpu = (pid) => !!cpuOf(pid);
 const roomUrl = () => `${location.origin}${location.pathname}?r=${ui.code}&b=${ui.broker}`;
-const gameMeta = (s = S()) => (isKioku(s) ? GAMES[s?.settings?.deck === 'k2' ? 'kioku2' : 'kioku1'] : isTalk(s) ? GAMES.talk : GAMES.baba);
+const gameMeta = (s = S()) => (isKioku(s) ? GAMES[s?.settings?.deck === 'k2' ? 'kioku2' : 'kioku1'] : isTalk(s) ? GAMES.talk : isNg(s) ? GAMES.ng : GAMES.baba);
 const gameBadge = (s = S()) => (isKioku(s) ? DECK_LABEL[s?.settings?.deck || 'k1'] : '');
 
 // CPUの番で、人がやること（お題の実行→次へ）は、だれが押してもいい
@@ -284,12 +294,12 @@ function afterStateChange(prev, s) {
     }
   }
   if (g?.chaser && !pg?.chaser) toast('チェイサータイム！ 全員お水を一口', 3500);
-  if (isTalk(s) && g?.notice && pg && g.notice.n !== pg.notice?.n && prev.round === s.round) {
+  if (isChat(s) && g?.notice && pg && g.notice.n !== pg.notice?.n && prev.round === s.round) {
     // 文面は画面のお知らせに出るので、トーストは出さない（結果画面にかぶるため）。代わりにハンコを押す
     const st = talkStamp(s, g.notice);
     if (st) { FX.playStamp(st); stampDelay = FX.STAMP_MS - 250; }
   }
-  if (isTalk(s) && g && pg && prev.round === s.round && (g.rerolls || 0) !== (pg.rerolls || 0)) {
+  if (isChat(s) && g && pg && prev.round === s.round && (g.rerolls || 0) !== (pg.rerolls || 0)) {
     toast(`テーマが変わった：「${T.themeText(g)}」`, 2600);
     FX.playSounds([['pop', 0], ['pop', 0.12]]);
   }
@@ -312,6 +322,10 @@ function drinkOf(prev, s) {
   const g = s?.game;
   const pg = prev?.game;
   if (!g || !pg || prev.created !== s.created || prev.round !== s.round) return null;
+  if (isNg(s)) {
+    const nt = g.notice;
+    return nt && nt.n !== pg.notice?.n && nt.kind === 'out' ? { kind: 'solo', water: false, mult: 1 } : null;
+  }
   if (isTalk(s)) {
     const nt = g.notice;
     if (!nt || nt.n === pg.notice?.n) return null;
@@ -576,7 +590,7 @@ function viewHome() {
   return `<main class="hub">
     <header class="brand-row"><span class="brand">NOMIKAI<br>CARDS</span><span class="brand-sub">飲み会カードゲーム集<br>（非公式ファンメイド）</span></header>
     <h1 class="hub-title"><span>今夜なに</span><span>遊ぶ？</span></h1>
-    <ul class="tiles">${tile('talk')}${tile('baba')}${tile('kioku1')}${tile('kioku2')}</ul>
+    <ul class="tiles">${tile('ng')}${tile('talk')}${tile('baba')}${tile('kioku1')}${tile('kioku2')}</ul>
     <section class="modes">
       <div class="mode-card"><img src="img/mode-duo.webp" alt=""><p><b>2人でもOK</b>2人だけになると、お題が2人用に切り替わる</p></div>
       <div class="mode-card"><img src="img/mode-hard.webp" alt=""><p><b>ゴリゴリ泥酔モード</b>ロビーでON。進むほど画面も酔っていく</p></div>
@@ -605,7 +619,7 @@ function viewSetup() {
     <label class="field"><span>あなたの名前</span>
       <input id="in-name" data-model="name" maxlength="10" autocomplete="nickname" placeholder="例：はるのり" value="${esc(me.name)}"></label>
     <button class="btn primary big" data-act="create">部屋を作る<small>みんな自分のスマホで参加</small></button>
-    <button class="btn" data-act="local">${esc(m.localLabel)}</button>
+    ${m.localLabel ? `<button class="btn" data-act="local">${esc(m.localLabel)}</button>` : '<p class="hint">自分のワードが見えないのが肝なので、1台モードはありません。みんな自分のスマホで。</p>'}
     <button class="btn link" data-act="rules">くわしい遊び方</button>
   </main>`;
 }
@@ -658,9 +672,9 @@ function viewLobby() {
         ${host ? '<p class="hint">「〜な人」で終わると、当てはまった人がペナルティのカードになります（だれもいなければ貯金）。それ以外はそのまま実行するお題に。</p>' : ''}
         ${custom.length ? `<ul class="custom-list">${custom.map((c) => `<li><span>${esc(c.t)}</span>${host ? `<button class="icon" data-act="custom-del" data-id="${c.id}" aria-label="消す">${ICON.x}</button>` : ''}</li>`).join('')}</ul>` : (host ? '' : '<p class="hint">まだありません</p>')}
       </div>` : '';
-  const talkRow = isTalk(s) ? `<div class="set-row"><span class="set-label">制限時間</span>
+  const talkRow = isChat(s) ? `<div class="set-row"><span class="set-label">制限時間</span>
         <div class="seg four">${[0, 3, 5, 10].map((mm) => `<button class="seg-btn ${Number(st.minutes || 0) === mm ? 'on' : ''}" ${host ? `data-act="set-min" data-m="${mm}"` : 'disabled'}>${mm ? `${mm}分` : 'なし'}</button>`).join('')}</div></div>
-        <p class="hint">バレたら${talkPen(s)}＆脱落、見破りハズレも${talkPen(s)}。だれかが達成したら、ほかの全員で${talkPen(s)}。</p>` : '';
+        <p class="hint">${isNg(s) ? `NGワードを言ったら${talkPen(s)}＆新しいワード。時間になったら、いちばん言った人がもう${talkPen(s)}。` : `バレたら${talkPen(s)}＆脱落、見破りハズレも${talkPen(s)}。だれかが達成したら、ほかの全員で${talkPen(s)}。`}</p>` : '';
   const settings = `
     <section class="settings">
       ${talkRow}
@@ -670,11 +684,11 @@ function viewLobby() {
         <div class="chips-wrap">${pens.map((p) => `<button class="pick sm ${st.penalty === p ? 'on' : ''}" ${host ? `data-act="set-pen" data-t="${esc(p)}"` : 'disabled'}>${esc(p)}</button>`).join('')}</div></div>` : ''}
       <button class="hard-toggle ${st.hard ? 'on' : ''}" ${host ? 'data-act="toggle-hard"' : 'disabled'} aria-pressed="${!!st.hard}">
         <img src="img/mode-hard.webp" alt="">
-        <span><b>ゴリゴリ泥酔モード</b><small>${!st.hard ? 'OFF' : isTalk(s) ? 'ON：ペナルティが全部二口' : 'ON：ペナルティ二口・縛りが重なる・画面も酔う。チェイサーは強制'}</small></span>
+        <span><b>ゴリゴリ泥酔モード</b><small>${!st.hard ? 'OFF' : isChat(s) ? 'ON：ペナルティが全部二口' : 'ON：ペナルティ二口・縛りが重なる・画面も酔う。チェイサーは強制'}</small></span>
         <span class="switch" aria-hidden="true"></span>
       </button>
       ${customRow}
-      ${n === 2 && !isTalk(s) ? '<div class="duo-note"><img src="img/mode-duo.webp" alt=""><p><b>2人モード</b>2人用のお題に切り替わります</p></div>' : ''}
+      ${n === 2 && !isChat(s) ? '<div class="duo-note"><img src="img/mode-duo.webp" alt=""><p><b>2人モード</b>2人用のお題に切り替わります</p></div>' : ''}
     </section>`;
   const canStart = n >= minPlayers(s);
   return `<main class="lobby">
@@ -687,17 +701,17 @@ function viewLobby() {
     </section>`}
     <section class="seats">
       <h2>席順 <small>${n}人</small></h2>
-      <p class="hint">${isTalk(s) ? 'トークトライアルは順番なし。CPUは会話できないので呼べません。' : isKioku(s) ? '座っている順（時計回り）に並べると、引く順番がそのまま回ります。' : '座っている順（時計回り）に並べてね。となりの人から引くので大事です。'}</p>
+      <p class="hint">${isChat(s) ? `${isNg(s) ? 'NGワードゲーム' : 'トークトライアル'}は順番なし。CPUは会話できないので呼べません。` : isKioku(s) ? '座っている順（時計回り）に並べると、引く順番がそのまま回ります。' : '座っている順（時計回り）に並べてね。となりの人から引くので大事です。'}</p>
       <ol>${rows}</ol>
       ${host ? `<div class="add-row">
         ${ui.local && (isKioku(s) || isTalk(s)) ? `<input id="in-add" data-model="addName" maxlength="10" placeholder="参加する人の名前" value="${esc(ui.addName)}"><button class="btn small" data-act="add-local">${ICON.plus}追加</button>` : ''}
-        ${isTalk(s) ? '' : `<button class="btn small cpu-btn" data-act="add-cpu">${ICON.bot}CPUを呼ぶ</button>`}
+        ${isChat(s) ? '' : `<button class="btn small cpu-btn" data-act="add-cpu">${ICON.bot}CPUを呼ぶ</button>`}
       </div>` : ''}
     </section>
     ${settings}
     <section class="lobby-actions">
       ${!inRoom() ? '<p class="hint">参加中…</p>' : host
-        ? `<button class="btn primary big" data-act="start" ${canStart ? '' : 'disabled'}>${canStart ? 'ゲームを始める' : `あと${minPlayers(s) - n}人${isTalk(s) ? '' : '（CPUでもOK）'}`}</button>`
+        ? `<button class="btn primary big" data-act="start" ${canStart ? '' : 'disabled'}>${canStart ? 'ゲームを始める' : `あと${minPlayers(s) - n}人${isChat(s) ? '' : '（CPUでもOK）'}`}</button>`
         : '<p class="waiting">ホストが始めるのを待っています</p>'}
       <button class="btn link" data-act="leave">${ui.local ? 'ホームに戻る' : '部屋を出る'}</button>
     </section>
@@ -707,7 +721,7 @@ function viewLobby() {
 // ---------- 共通：上のバーと席 ----------
 function drunkLevel(s) {
   const g = s?.game;
-  if (!g?.hard || s.phase !== 'play' || isTalk(s)) return 0;
+  if (!g?.hard || s.phase !== 'play' || isChat(s)) return 0;
   const steps = isKioku(s) ? g.n : g.seq;
   return Math.min(1, steps / 36);
 }
@@ -720,14 +734,14 @@ function topBar() {
   if (g && s.phase === 'play') {
     // 貯金は上限なしで増えるので、ルールの長いチップに押し出されないよう先頭に出す
     if (isKioku(s) && g.pot) chips.push(`<span class="chip pot">貯金 ${potDots(g.pot)}</span>`);
-    if (!isKioku(s) && !isTalk(s)) chips.push(`<span class="chip">${ICON.dir}${g.dir === 1 ? '時計回り' : '反時計回り'}</span>`);
+    if (!isKioku(s) && !isChat(s)) chips.push(`<span class="chip">${ICON.dir}${g.dir === 1 ? '時計回り' : '反時計回り'}</span>`);
     if (isTalk(s)) chips.push(`<span class="chip">残り ${T.alive(s).length}人</span>`);
     const rules = isKioku(s) ? g.rules || [] : (g.hard ? g.rules || [] : (g.rule ? [g.rule] : []));
     for (const r of rules) chips.push(`<span class="chip rule">${isKioku(s) ? 'ルール' : '縛り'}：${esc(r.text)}</span>`);
     if (g.double) chips.push('<span class="chip x2c">次のお題 2倍</span>');
     if (g.skip) chips.push(`<span class="chip">スキップ待ち ${g.skip}</span>`);
     if (g.duo) chips.push('<span class="chip">2人モード</span>');
-    if (g.hard && isTalk(s)) chips.push('<span class="chip hard">泥酔：ペナルティ二口</span>');
+    if (g.hard && isChat(s)) chips.push('<span class="chip hard">泥酔：ペナルティ二口</span>');
     else if (g.hard) {
       const lv = Math.round(drunkLevel(s) * 5);
       chips.push(`<span class="chip hard">泥酔 ${'●'.repeat(lv)}${'○'.repeat(5 - lv)}</span>`);
@@ -744,6 +758,10 @@ function topBar() {
 function seatStrip() {
   const s = S();
   const g = s.game;
+  if (isNg(s)) {
+    const items = s.players.map((p) => `<li class="pl ${p.id === me.id ? 'me' : ''}">${avatar(p, 's')}<span class="pl-name">${esc(p.name)}</span><span class="pl-count">${N.outsOf(g, p.id)}回</span></li>`);
+    return `<ul class="strip" data-scroll="strip">${items.join('')}</ul>`;
+  }
   if (isTalk(s)) {
     const items = s.players.map((p) => {
       const stt = g.status[p.id];
@@ -1074,6 +1092,7 @@ function talkNoticeText(s, nt, html = true) {
 // 通知ごとのハンコ。名前はエスケープして入れる（ハンコは innerHTML で描く）
 function talkStamp(s, nt) {
   const n = (pid) => esc(L.nameOf(s, pid));
+  if (nt.kind === 'out') return { text: 'NGワード！', sub: `${n(nt.target)}「${esc(N.wordText(nt.word))}」`, tone: 'pink', sounds: [['buzz', 0], ['pop', 0.6]] };
   if (nt.kind === 'busted') return { text: '見破った！', sub: `${n(nt.by)} → ${n(nt.target)}`, tone: 'pink', sounds: [['pop', 0], ['clink', 0.08], ['fanfare', 0.12]] };
   if (nt.kind === 'miss') return { text: 'ハズレ！', sub: `${n(nt.by)}が${talkPen(s)}`, tone: 'ink', sounds: [['buzz', 0]] };
   if (nt.kind === 'won') return { text: 'ミッション<br>達成！', sub: n(nt.who), tone: 'pink', sounds: [['pop', 0], ['fanfare', 0.08], ['cheer', 0.1]] };
@@ -1153,12 +1172,60 @@ function talkEnd() {
   </div>`;
 }
 
+// ---------- 画面：NGワードゲーム ----------
+function viewNg() {
+  const s = S();
+  const g = s.game;
+  const pen = talkPen(s);
+  const timer = g.endsAt && g.step === 'talk' ? `<p class="k-timer t-timer">${ICON.timer}<span class="timer-num" data-end="${g.endsAt}" data-fmt="ms">${fmtLeft(g.endsAt)}</span></p>` : '';
+  const nt = g.notice?.kind === 'out' ? `<div class="k-notice drawer" role="status"><b>NGワード！</b>${nm(g.notice.target)}が「${esc(N.wordText(g.notice.word))}」と言った → ${pen}（${nm(g.notice.by)}が指摘）。新しいワードに替わりました</div>` : '';
+  const mine = inRoom() ? `<div class="ng-me"><span>あなたのNGワード</span><b>？？？</b><small>みんなには見えています。言ったら${pen}</small><em>${N.outsOf(g, me.id)}回</em></div>` : '';
+  const others = s.players.filter((p) => !inRoom() || p.id !== me.id).map((p) => `<li class="ng-row">
+      <span class="ng-who">${avatar(p, 's')}<span><b>${esc(p.name)}</b><small>${N.outsOf(g, p.id)}回</small></span></span>
+      <b class="ng-word">${esc(N.wordText(g.words[p.id]))}</b>
+      ${inRoom() && g.step === 'talk' ? `<button class="btn small ng-out" data-act="ngout" data-pid="${p.id}" data-w="${g.words[p.id]}">言った！</button>` : ''}
+    </li>`).join('');
+  return `${seatStrip()}
+    <section class="ng-stage">
+      <article class="t-theme"><img src="img/t-theme.webp" alt=""><div><span class="k-genre">トークテーマ</span><p class="t-theme-text">${esc(N.themeText(g))}</p>
+        ${isHost() && g.step === 'talk' ? '<button class="t-reroll" data-act="treroll">別のテーマにする</button>' : ''}</div></article>
+      ${timer}${nt}${mine}
+      <h3 class="ng-h">みんなのNGワード<small>本人には見えていません。言ったらすぐ「言った！」</small></h3>
+      <ul class="ng-list">${others}</ul>
+    </section>
+    ${ngEnd()}`;
+}
+
+function ngEnd() {
+  const s = S();
+  const g = s.game;
+  if (g.step !== 'over') return '';
+  const pen = talkPen(s);
+  const max = g.worst?.length ? N.outsOf(g, g.worst[0]) : 0;
+  const title = max ? `${g.worst.map((pid) => nm(pid)).join('・')}がいちばん言った！` : 'だれも言わなかった！';
+  const sub = max ? `${max}回 → もう${pen}` : '全員の勝ち。乾杯！';
+  const fl = anim(`${s.created}:${s.round}:ng-end`, 900);
+  const rows = [...s.players].sort((a, b) => N.outsOf(g, a.id) - N.outsOf(g, b.id)).map((p) => {
+    const said = g.said.filter((x) => x.pid === p.id).map((x) => `「${esc(N.wordText(x.word))}」`).join('');
+    return `<li class="t-row ${g.worst?.includes(p.id) ? 'won' : ''}">${avatar(p, 's')}<div><b>${esc(p.name)}</b><span class="t-st">${N.outsOf(g, p.id)}回</span>
+      <p>最後のNGワード：「${esc(N.wordText(g.words[p.id]))}」${said ? `<br>言ってしまった：${said}` : ''}</p></div></li>`;
+  }).join('');
+  return `<div class="overlay end talk-end" role="dialog" aria-label="結果">
+    <figure class="result-art ${fl.cls}" style="${fl.style}"><img src="img/ng-out.webp" alt=""></figure>
+    <h2 class="loser-name">${title}</h2>
+    <p class="ov-ask">${sub}</p>
+    <h3 class="t-reveal-h">みんなのNGワード（言った回数の少ない順）</h3>
+    <ul class="t-reveal">${rows}</ul>
+    ${isHost() ? '<div class="end-actions"><button class="btn primary big" data-act="again">もう一回（ワードもテーマも新しく）</button><button class="btn" data-act="lobby">メンバーや時間を変える</button></div>' : '<p class="waiting">ホストが次のラウンドを始めるのを待っています</p>'}
+  </div>`;
+}
+
 function viewGame() {
   const s = S();
   const lv = drunkLevel(s);
-  return `<main class="game ${isKioku(s) ? 'kioku' : isTalk(s) ? 'kioku talk' : 'baba'} ${lv > 0 ? 'drunk' : ''}" style="--drunk:${lv.toFixed(2)}">
+  return `<main class="game ${isKioku(s) ? 'kioku' : isTalk(s) ? 'kioku talk' : isNg(s) ? 'kioku ng' : 'baba'} ${lv > 0 ? 'drunk' : ''}" style="--drunk:${lv.toFixed(2)}">
     ${topBar()}
-    ${isKioku(s) ? viewKioku() : isTalk(s) ? viewTalk() : viewBaba()}
+    ${isKioku(s) ? viewKioku() : isTalk(s) ? viewTalk() : isNg(s) ? viewNg() : viewBaba()}
   </main>`;
 }
 
@@ -1199,6 +1266,13 @@ const RULES_TALK = `<h2>トークトライアル</h2>
   <li><b>起きたら「達成！」</b>ミッションが公開されて勝ち。ほかの全員で一口。</li>
 </ol>
 <p class="hint"><b>見破る</b>：怪しい人のミッションを3択で当てます（1人1ラウンド1回）。当たればその人は脱落して一口、外れたら自分が一口。最後の1人になったら逃げ切りで勝ち。制限時間を過ぎたら全員で一口。</p>`;
+const RULES_NG = `<h2>NGワードゲーム</h2>
+<ol class="steps">
+  <li><b>全員にNGワードが配られる</b>自分のスマホには、ほかの人のNGワードだけが出ます。自分のワードは見えません。</li>
+  <li><b>テーマに沿って会話</b>相手のNGワードを言わせるように、さりげなく話を振ります。</li>
+  <li><b>言ったら「言った！」</b>その人が一口。すぐ新しいNGワードに替わって、会話は続きます。</li>
+</ol>
+<p class="hint">制限時間になったら、いちばん多く言った人がもう一口。2人でも遊べます。同時に押しても1回しか数えません。</p>`;
 const RULES_COMMON = `<h3>モード</h3>
 <p class="hint"><b>2人モード</b>：参加者がちょうど2人のとき自動で切り替わり、お題が「相手と」「2人で」になります。<br>
 <b>CPU</b>：ロビーの「CPUを呼ぶ」で追加。CPUは自分で引いて、選んで、指名もします。お題の実行は人間が「次へ」を押します。<br>
@@ -1246,7 +1320,7 @@ function viewSheet() {
   let body = '';
   if (sh.type === 'rules') {
     const kind = sh.kind || kindOf();
-    body = kind === 'talk' ? RULES_TALK : (kind === 'kioku' ? RULES_KIOKU : RULES_BABA) + RULES_COMMON;
+    body = kind === 'ng' ? RULES_NG : kind === 'talk' ? RULES_TALK : (kind === 'kioku' ? RULES_KIOKU : RULES_BABA) + RULES_COMMON;
   }
   if (sh.type === 'accuse') body = accuseSheet();
   if (sh.type === 'achieve') body = achieveSheet();
@@ -1261,7 +1335,7 @@ function viewSheet() {
         ${s && inRoom() && !isHost() ? '<button class="btn" data-act="become-host">自分がホストになる</button>' : ''}
         ${s && isHost() && s.phase === 'play' ? '<button class="btn" data-act="lobby-confirm">ゲームを中断してロビーへ</button>' : ''}
         ${s?.game && isHost() && (s.game.rule || s.game.rules?.length) ? '<button class="btn" data-act="clear-rule">縛り・ルールを全部解除</button>' : ''}
-        ${s && isTalk(s) && isHost() && s.game?.step === 'talk' ? '<button class="btn" data-act="tend">このラウンドを終える（勝者なし）</button>' : ''}
+        ${s && isChat(s) && isHost() && s.game?.step === 'talk' ? `<button class="btn" data-act="tend">このラウンドを終える${isTalk(s) ? '（勝者なし）' : ''}</button>` : ''}
         <button class="btn" data-act="leave">ホーム画面に戻る</button>
       </div>
       ${ui.local ? '' : `<p class="hint">接続：${ui.net === 'online' ? 'つながっています' : '再接続中'}（サーバー${(ui.broker ?? 0) + 1}）。ホストのスマホが止まったら、だれかが「自分がホストになる」を押すと代わりに進められます（CPUもその人のスマホが動かします）。</p>`}
@@ -1487,8 +1561,13 @@ function handle(act, d) {
       commit((x) => T.accuse(x, by, target, Number(d.m)));
       break;
     }
-    case 'treroll': commit((x) => T.rerollTheme(x)); break;
-    case 'tend': ui.sheet = null; if (confirm('このラウンドを勝者なしで終えますか？')) commit((x) => T.endRound(x)); break;
+    case 'treroll': commit((x) => (isNg(x) ? N.rerollTheme(x) : T.rerollTheme(x))); break;
+    case 'tend': ui.sheet = null; if (confirm('このラウンドを終えますか？')) commit((x) => (isNg(x) ? N.endRound(x) : T.endRound(x))); break;
+    case 'ngout': {
+      const w = Number(d.w);
+      if (confirm(`${L.nameOf(s, d.pid)}が「${N.wordText(w)}」と言った？`)) commit((x) => N.callOut(x, me.id, d.pid, w));
+      break;
+    }
     case 'become-host': ui.sheet = null; commit((x) => L.makeHost(x, me.id)); toast('あなたがホストになりました'); break;
     case 'lobby-confirm': ui.sheet = null; if (confirm('ゲームを中断してロビーに戻りますか？')) commit((x) => L.backToLobby(x)); break;
     case 'clear-rule': ui.sheet = null; commit((x) => { const y = JSON.parse(JSON.stringify(x)); y.game.rule = null; y.game.rules = []; return y; }); break;
@@ -1546,7 +1625,7 @@ setInterval(() => {
   scheduleCpu();
   if (BOT) scheduleBot();
   const s = S();
-  if (s && isTalk(s) && isHost() && s.game?.step === 'talk' && s.game.endsAt && Date.now() >= s.game.endsAt) commit((x) => T.timeUp(x));
+  if (s && isChat(s) && isHost() && s.game?.step === 'talk' && s.game.endsAt && Date.now() >= s.game.endsAt) commit((x) => (isNg(x) ? N.timeUp(x) : T.timeUp(x)));
 }, 1000);
 
 // ---------- テスト用の窓口 ----------
@@ -1561,7 +1640,8 @@ window.render_game_to_text = () => {
     duo: g?.duo ?? null, hard: g?.hard ?? null,
     fx: { count: FX.fxState.count, last: FX.fxState.last, sound: FX.fxState.sound },
   };
-  if (isTalk(s) && g) Object.assign(base, { theme: T.themeText(g), myMission: g.missions[me.id] ?? null, status: g.status, used: g.used, winner: g.winner, notice: g.notice, endsAt: g.endsAt, showMission: !!ui.showMission });
+  if (isNg(s) && g) Object.assign(base, { theme: N.themeText(g), words: g.words, outs: g.outs, notice: g.notice, endsAt: g.endsAt, worst: g.worst ?? null, visibleWords: [...document.querySelectorAll('.ng-word')].map((e) => e.textContent) });
+  else if (isTalk(s) && g) Object.assign(base, { theme: T.themeText(g), myMission: g.missions[me.id] ?? null, status: g.status, used: g.used, winner: g.winner, notice: g.notice, endsAt: g.endsAt, showMission: !!ui.showMission });
   else if (isKioku(s) && g) Object.assign(base, { turn: g.turn, card: g.card, text: K.currentCard(s)?.t ?? null, remaining: K.remaining(s), n: g.n, rules: g.rules, committed: g.committed, pot: g.pot ?? 0, notice: g.notice ?? null, hit: K.isHitCard(K.currentCard(s)), toast: K.isToastCard(K.currentCard(s)) });
   else if (g) Object.assign(base, { turn: g.turn, target: L.drawTarget(s), myHand: g.hands[me.id] ?? null, finished: g.finished, loser: g.loser, penalty: g.penalty, pair: g.pair ? { by: g.pair.by, cards: g.pair.cards, chosen: g.pair.chosen, committed: g.pair.committed } : null });
   return JSON.stringify(base);
