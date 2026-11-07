@@ -1,6 +1,7 @@
 // 画面と操作。ルールは logic.js（ババ酒）と kioku.js（記憶）、通信は net.js。
 import * as L from './logic.js';
 import * as K from './kioku.js';
+import * as T from './talk.js';
 import { SUIT_INFO, PENALTY_PRESETS } from './odai.js';
 import { GENRES, PENALTY_CHOICES, PENALTY_CHOICES_HARD } from './kioku-data.js';
 import { CPU_BY_KEY, cpuLine } from './cpus.js';
@@ -34,15 +35,21 @@ const GAMES = {
   },
   kioku1: {
     kind: 'kioku', title: '記憶無くしちゃダメですか', titleHtml: '記憶無くしちゃ<br>ダメですか', badge: '第1弾', img: 'hub-kioku1', tone: 'pink',
-    desc: '当てはまった人・直近◯◯した人・全員参加・遅刻ドジ。元祖の54枚', meta: '2人〜', settings: { deck: 'k1' },
+    desc: '当てはまった人・直近◯◯した人・全員参加・遅刻ドジ・飲みゲー。元祖の59枚', meta: '2人〜', settings: { deck: 'k1' },
     steps: ['順番にカードを引く（引いた人が「私」）', '書いてあることに従う', '次の人へ'],
     localLabel: 'このスマホ1台で遊ぶ',
   },
   kioku2: {
     kind: 'kioku', title: '記憶無くしちゃダメですか', titleHtml: '記憶無くしちゃ<br>ダメですか', badge: '第2弾', img: 'hub-kioku2', tone: 'blue',
-    desc: '王様・指名・ミニゲーム・暴露。もっと攻めた54枚', meta: '2人〜', settings: { deck: 'k2' },
+    desc: '王様・指名・ミニゲーム・乾杯・飲みゲー。もっと攻めた58枚', meta: '2人〜', settings: { deck: 'k2' },
     steps: ['順番にカードを引く（引いた人が「私」）', '書いてあることに従う', '次の人へ'],
     localLabel: 'このスマホ1台で遊ぶ',
+  },
+  talk: {
+    kind: 'talk', title: 'トークトライアル', titleHtml: 'トーク<br>トライアル', badge: 'NEW', img: 'hub-talk', tone: 'ink',
+    desc: '全員に秘密のミッション。会話をさりげなく誘導して、バレずに達成したら勝ち', meta: '2〜10人', settings: { minutes: 5 },
+    steps: ['全員に同じトークテーマと、自分だけの秘密のミッションが届く', 'テーマに沿って自由に会話する', 'ミッションが起きたら「達成！」。怪しい人は「見破る」'],
+    localLabel: 'このスマホ1台で遊ぶ（ミッションはこっそり確認）',
   },
 };
 const DECK_LABEL = { k1: '第1弾', k2: '第2弾', mix: '第1弾＋第2弾' };
@@ -81,15 +88,18 @@ const S = () => ui.state;
 const nm = (pid) => esc(L.nameOf(S(), pid));
 const kindOf = (s = S()) => s?.kind || 'baba';
 const isKioku = (s = S()) => kindOf(s) === 'kioku';
-const actorOf = (s) => (isKioku(s) ? K.actorOf(s) : L.actorOf(s));
-const minPlayers = (s = S()) => (isKioku(s) ? K.MIN_PLAYERS : L.MIN_PLAYERS);
+const isTalk = (s = S()) => kindOf(s) === 'talk';
+const actorOf = (s) => (isKioku(s) ? K.actorOf(s) : isTalk(s) ? s.hostId : L.actorOf(s));
+const minPlayers = (s = S()) => (isKioku(s) ? K.MIN_PLAYERS : isTalk(s) ? T.MIN_PLAYERS : L.MIN_PLAYERS);
+const startFor = (x) => (isKioku(x) ? K.startGame(x) : isTalk(x) ? T.startGame(x) : L.startGame(x));
+const talkPen = (s = S()) => (s?.settings?.hard || s?.game?.hard ? '二口' : '一口');
 const isHost = () => ui.local || S()?.hostId === me.id;
 const inRoom = () => ui.local || !!S()?.players.some((p) => p.id === me.id);
 const actor = () => (S() ? actorOf(S()) : null);
 const cpuOf = (pid) => S()?.players.find((p) => p.id === pid)?.cpu || null;
 const isCpu = (pid) => !!cpuOf(pid);
 const roomUrl = () => `${location.origin}${location.pathname}?r=${ui.code}&b=${ui.broker}`;
-const gameMeta = (s = S()) => (isKioku(s) ? GAMES[s?.settings?.deck === 'k2' ? 'kioku2' : 'kioku1'] : GAMES.baba);
+const gameMeta = (s = S()) => (isKioku(s) ? GAMES[s?.settings?.deck === 'k2' ? 'kioku2' : 'kioku1'] : isTalk(s) ? GAMES.talk : GAMES.baba);
 const gameBadge = (s = S()) => (isKioku(s) ? DECK_LABEL[s?.settings?.deck || 'k1'] : '');
 
 // CPUの番で、人がやること（お題の実行→次へ）は、だれが押してもいい
@@ -268,13 +278,18 @@ function afterStateChange(prev, s) {
     }
   }
   if (g?.chaser && !pg?.chaser) toast('チェイサータイム！ 全員お水を一口', 3500);
+  if (isTalk(s) && g?.notice && pg && g.notice.n !== pg.notice?.n && prev.round === s.round) {
+    // 文面は画面のお知らせに出るので、トーストは出さない（結果画面にかぶるため）
+    vibrate([90, 50, 90]);
+  }
   if (isKioku(s) && g?.notice && pg && (!pg.notice || pg.notice.n !== g.notice.n || pg.notice.kind !== g.notice.kind)) {
     if (g.notice.kind === 'paid' || g.notice.kind === 'kanpai') vibrate([120, 60, 120]);
   }
   const drink = drinkOf(prev, s);
   if (drink) FX.playDrink(drink);
-  if (s.phase === 'play' && actorOf(s) === me.id && (!prev || actorOf(prev) !== me.id || prev.phase !== 'play')) vibrate([70, 40, 70]);
-  document.title = s.phase === 'play' && actorOf(s) === me.id && !ui.local ? '● あなたの番｜NOMIKAI CARDS' : 'NOMIKAI CARDS';
+  const myTurn = (x) => x?.phase === 'play' && !isTalk(x) && actorOf(x) === me.id;
+  if (myTurn(s) && !myTurn(prev)) vibrate([70, 40, 70]);
+  document.title = myTurn(s) && !ui.local ? '● あなたの番｜NOMIKAI CARDS' : 'NOMIKAI CARDS';
   keepAwake(s.phase === 'play' || s.phase === 'over');
   scheduleCpu();
   if (BOT) scheduleBot();
@@ -285,6 +300,12 @@ function drinkOf(prev, s) {
   const g = s?.game;
   const pg = prev?.game;
   if (!g || !pg || prev.created !== s.created || prev.round !== s.round) return null;
+  if (isTalk(s)) {
+    const nt = g.notice;
+    if (!nt || nt.n === pg.notice?.n) return null;
+    if (nt.kind === 'busted' || nt.kind === 'miss') return { kind: 'solo', water: false, mult: 1 };
+    return { kind: 'multi', water: false, mult: 1 };
+  }
   if (isKioku(s)) {
     // 当てはまり系は「いた！」が押された瞬間（だれもいないときは出さない）
     if (g.lastHit && g.lastHit.n !== pg.lastHit?.n) return kiokuHitDrink(kPen(s), g.lastHit.mult);
@@ -543,7 +564,7 @@ function viewHome() {
   return `<main class="hub">
     <header class="brand-row"><span class="brand">NOMIKAI<br>CARDS</span><span class="brand-sub">飲み会カードゲーム集<br>（非公式ファンメイド）</span></header>
     <h1 class="hub-title"><span>今夜なに</span><span>遊ぶ？</span></h1>
-    <ul class="tiles">${tile('baba')}${tile('kioku1')}${tile('kioku2')}</ul>
+    <ul class="tiles">${tile('talk')}${tile('baba')}${tile('kioku1')}${tile('kioku2')}</ul>
     <section class="modes">
       <div class="mode-card"><img src="img/mode-duo.webp" alt=""><p><b>2人でもOK</b>2人だけになると、お題が2人用に切り替わる</p></div>
       <div class="mode-card"><img src="img/mode-hard.webp" alt=""><p><b>ゴリゴリ泥酔モード</b>ロビーでON。進むほど画面も酔っていく</p></div>
@@ -618,18 +639,29 @@ function viewLobby() {
     </li>`).join('');
   const st = s.settings || {};
   const pens = st.hard ? PENALTY_CHOICES_HARD : PENALTY_CHOICES;
+  const custom = st.custom || [];
+  const customRow = isKioku(s) ? `<div class="set-row"><span class="set-label">マイお題 <small>${custom.length}/${K.CUSTOM_MAX}枚・山札に混ざる</small></span>
+        ${host ? `<div class="custom-add"><input id="in-custom" data-model="customText" maxlength="50" placeholder="例：今日ハイボールを頼んだ人" value="${esc(ui.customText || '')}"><button class="btn small" data-act="custom-add">${ICON.plus}追加</button></div>` : ''}
+        ${host ? '<p class="hint">「〜な人」で終わると、当てはまった人がペナルティのカードになります（だれもいなければ貯金）。それ以外はそのまま実行するお題に。</p>' : ''}
+        ${custom.length ? `<ul class="custom-list">${custom.map((c) => `<li><span>${esc(c.t)}</span>${host ? `<button class="icon" data-act="custom-del" data-id="${c.id}" aria-label="消す">${ICON.x}</button>` : ''}</li>`).join('')}</ul>` : (host ? '' : '<p class="hint">まだありません</p>')}
+      </div>` : '';
+  const talkRow = isTalk(s) ? `<div class="set-row"><span class="set-label">制限時間</span>
+        <div class="seg four">${[0, 3, 5, 10].map((mm) => `<button class="seg-btn ${Number(st.minutes || 0) === mm ? 'on' : ''}" ${host ? `data-act="set-min" data-m="${mm}"` : 'disabled'}>${mm ? `${mm}分` : 'なし'}</button>`).join('')}</div></div>
+        <p class="hint">バレたら${talkPen(s)}＆脱落、見破りハズレも${talkPen(s)}。だれかが達成したら、ほかの全員で${talkPen(s)}。</p>` : '';
   const settings = `
     <section class="settings">
+      ${talkRow}
       ${isKioku(s) ? `<div class="set-row"><span class="set-label">山札</span>
         <div class="seg">${['k1', 'k2', 'mix'].map((d) => `<button class="seg-btn ${st.deck === d ? 'on' : ''}" ${host ? `data-act="set-deck" data-d="${d}"` : 'disabled'}>${DECK_LABEL[d]}</button>`).join('')}</div></div>
         <div class="set-row"><span class="set-label">ペナルティ</span>
         <div class="chips-wrap">${pens.map((p) => `<button class="pick sm ${st.penalty === p ? 'on' : ''}" ${host ? `data-act="set-pen" data-t="${esc(p)}"` : 'disabled'}>${esc(p)}</button>`).join('')}</div></div>` : ''}
       <button class="hard-toggle ${st.hard ? 'on' : ''}" ${host ? 'data-act="toggle-hard"' : 'disabled'} aria-pressed="${!!st.hard}">
         <img src="img/mode-hard.webp" alt="">
-        <span><b>ゴリゴリ泥酔モード</b><small>${st.hard ? 'ON：ペナルティ二口・縛りが重なる・画面も酔う。チェイサーは強制' : 'OFF'}</small></span>
+        <span><b>ゴリゴリ泥酔モード</b><small>${!st.hard ? 'OFF' : isTalk(s) ? 'ON：ペナルティが全部二口' : 'ON：ペナルティ二口・縛りが重なる・画面も酔う。チェイサーは強制'}</small></span>
         <span class="switch" aria-hidden="true"></span>
       </button>
-      ${n === 2 ? '<div class="duo-note"><img src="img/mode-duo.webp" alt=""><p><b>2人モード</b>2人用のお題に切り替わります</p></div>' : ''}
+      ${customRow}
+      ${n === 2 && !isTalk(s) ? '<div class="duo-note"><img src="img/mode-duo.webp" alt=""><p><b>2人モード</b>2人用のお題に切り替わります</p></div>' : ''}
     </section>`;
   const canStart = n >= minPlayers(s);
   return `<main class="lobby">
@@ -642,17 +674,17 @@ function viewLobby() {
     </section>`}
     <section class="seats">
       <h2>席順 <small>${n}人</small></h2>
-      <p class="hint">${isKioku(s) ? '座っている順（時計回り）に並べると、引く順番がそのまま回ります。' : '座っている順（時計回り）に並べてね。となりの人から引くので大事です。'}</p>
+      <p class="hint">${isTalk(s) ? 'トークトライアルは順番なし。CPUは会話できないので呼べません。' : isKioku(s) ? '座っている順（時計回り）に並べると、引く順番がそのまま回ります。' : '座っている順（時計回り）に並べてね。となりの人から引くので大事です。'}</p>
       <ol>${rows}</ol>
       ${host ? `<div class="add-row">
-        ${ui.local && isKioku(s) ? `<input id="in-add" data-model="addName" maxlength="10" placeholder="参加する人の名前" value="${esc(ui.addName)}"><button class="btn small" data-act="add-local">${ICON.plus}追加</button>` : ''}
-        <button class="btn small cpu-btn" data-act="add-cpu">${ICON.bot}CPUを呼ぶ</button>
+        ${ui.local && (isKioku(s) || isTalk(s)) ? `<input id="in-add" data-model="addName" maxlength="10" placeholder="参加する人の名前" value="${esc(ui.addName)}"><button class="btn small" data-act="add-local">${ICON.plus}追加</button>` : ''}
+        ${isTalk(s) ? '' : `<button class="btn small cpu-btn" data-act="add-cpu">${ICON.bot}CPUを呼ぶ</button>`}
       </div>` : ''}
     </section>
     ${settings}
     <section class="lobby-actions">
       ${!inRoom() ? '<p class="hint">参加中…</p>' : host
-        ? `<button class="btn primary big" data-act="start" ${canStart ? '' : 'disabled'}>${canStart ? 'ゲームを始める' : `あと${minPlayers(s) - n}人（CPUでもOK）`}</button>`
+        ? `<button class="btn primary big" data-act="start" ${canStart ? '' : 'disabled'}>${canStart ? 'ゲームを始める' : `あと${minPlayers(s) - n}人${isTalk(s) ? '' : '（CPUでもOK）'}`}</button>`
         : '<p class="waiting">ホストが始めるのを待っています</p>'}
       <button class="btn link" data-act="leave">${ui.local ? 'ホームに戻る' : '部屋を出る'}</button>
     </section>
@@ -662,7 +694,7 @@ function viewLobby() {
 // ---------- 共通：上のバーと席 ----------
 function drunkLevel(s) {
   const g = s?.game;
-  if (!g?.hard || s.phase !== 'play') return 0;
+  if (!g?.hard || s.phase !== 'play' || isTalk(s)) return 0;
   const steps = isKioku(s) ? g.n : g.seq;
   return Math.min(1, steps / 36);
 }
@@ -675,13 +707,15 @@ function topBar() {
   if (g && s.phase === 'play') {
     // 貯金は上限なしで増えるので、ルールの長いチップに押し出されないよう先頭に出す
     if (isKioku(s) && g.pot) chips.push(`<span class="chip pot">貯金 ${potDots(g.pot)}</span>`);
-    if (!isKioku(s)) chips.push(`<span class="chip">${ICON.dir}${g.dir === 1 ? '時計回り' : '反時計回り'}</span>`);
+    if (!isKioku(s) && !isTalk(s)) chips.push(`<span class="chip">${ICON.dir}${g.dir === 1 ? '時計回り' : '反時計回り'}</span>`);
+    if (isTalk(s)) chips.push(`<span class="chip">残り ${T.alive(s).length}人</span>`);
     const rules = isKioku(s) ? g.rules || [] : (g.hard ? g.rules || [] : (g.rule ? [g.rule] : []));
     for (const r of rules) chips.push(`<span class="chip rule">${isKioku(s) ? 'ルール' : '縛り'}：${esc(r.text)}</span>`);
     if (g.double) chips.push('<span class="chip x2c">次のお題 2倍</span>');
     if (g.skip) chips.push(`<span class="chip">スキップ待ち ${g.skip}</span>`);
     if (g.duo) chips.push('<span class="chip">2人モード</span>');
-    if (g.hard) {
+    if (g.hard && isTalk(s)) chips.push('<span class="chip hard">泥酔：ペナルティ二口</span>');
+    else if (g.hard) {
       const lv = Math.round(drunkLevel(s) * 5);
       chips.push(`<span class="chip hard">泥酔 ${'●'.repeat(lv)}${'○'.repeat(5 - lv)}</span>`);
     }
@@ -697,6 +731,14 @@ function topBar() {
 function seatStrip() {
   const s = S();
   const g = s.game;
+  if (isTalk(s)) {
+    const items = s.players.map((p) => {
+      const stt = g.status[p.id];
+      const badge = stt === 'out' ? '<span class="pl-badge">バレた</span>' : stt === 'won' ? '<span class="pl-badge">勝ち</span>' : g.used[p.id] ? '<span class="pl-badge">見破り済</span>' : '';
+      return `<li class="pl ${stt === 'out' ? 'done' : ''} ${stt === 'won' ? 'turn' : ''} ${p.id === me.id && !ui.local ? 'me' : ''}">${avatar(p, 's')}<span class="pl-name">${esc(p.name)}</span>${badge}</li>`;
+    });
+    return `<ul class="strip" data-scroll="strip">${items.join('')}</ul>`;
+  }
   const kioku = isKioku(s);
   const target = kioku ? null : L.drawTarget(s);
   const items = s.players.map((p) => {
@@ -995,12 +1037,91 @@ function viewKioku() {
     </section>`;
 }
 
+// ---------- 画面：トークトライアル ----------
+function talkNoticeText(s, nt, html = true) {
+  const n = (pid) => (html ? nm(pid) : L.nameOf(s, pid));
+  const pen = talkPen(s);
+  const b = (t) => (html ? `<b>${t}</b>` : `${t} `);
+  if (nt.kind === 'busted') return `${b('見破った！')}${n(nt.by)}が${n(nt.target)}のミッション「${esc(T.missionText(nt.mission))}」を当てた → ${n(nt.target)}は脱落して${pen}`;
+  if (nt.kind === 'miss') return `${b('ハズレ！')}${n(nt.by)}の見破りは外れ → ${n(nt.by)}が${pen}`;
+  return '';
+}
+
+function viewTalk() {
+  const s = S();
+  const g = s.game;
+  const my = g.status[me.id];
+  const timer = g.endsAt && g.step === 'talk' ? `<p class="k-timer t-timer">${ICON.timer}<span class="timer-num" data-end="${g.endsAt}" data-fmt="ms">${fmtLeft(g.endsAt)}</span></p>` : '';
+  const nt = g.notice && (g.notice.kind === 'busted' || g.notice.kind === 'miss') ? `<div class="k-notice ${g.notice.kind === 'busted' ? 'drawer' : 'stock'}" role="status">${talkNoticeText(s, g.notice)}</div>` : '';
+  let mission;
+  if (ui.local) {
+    mission = `<div class="t-local"><p>ミッションは、名前をタップして本人だけがこっそり確認</p>
+      <div class="pick-row">${s.players.map((p) => `<button class="pick ${g.status[p.id] === 'out' ? 'off' : ''}" data-act="tpeek-who" data-pid="${p.id}">${esc(p.name)}</button>`).join('')}</div></div>`;
+  } else if (!inRoom()) {
+    mission = '<p class="hint">観戦中です。次のラウンドから参加できます。</p>';
+  } else if (my === 'out') {
+    mission = `<div class="t-mission out"><img src="img/t-busted.webp" alt=""><p><b>バレてしまった…</b>ミッション：${esc(T.missionText(g.missions[me.id]))}<br>あとはみんなの会話を見守ろう</p></div>`;
+  } else if (ui.showMission) {
+    mission = `<button class="t-mission open" data-act="tpeek"><span class="k-genre">ひみつのミッション</span>
+      <span class="t-mission-text">${esc(T.missionText(g.missions[me.id]))}</span>
+      <small>これが起きたら「達成！」。自分で言ったりやったりしても無効。タップで隠す</small></button>`;
+  } else {
+    mission = `<button class="t-mission closed" data-act="tpeek"><img src="img/t-mission.webp" alt=""><span><b>ひみつのミッション</b><small>タップで表示（まわりに見られないように）</small></span></button>`;
+  }
+  let action;
+  if (ui.local) {
+    action = `<button class="btn primary big" data-act="tachieve">だれかが達成した！</button>
+      <button class="btn stack" data-act="taccuse">見破る<small>怪しい人のミッションを3択で当てる（1人1回）</small></button>`;
+  } else if (inRoom() && my === 'play') {
+    action = `<button class="btn primary big" data-act="tachieve">達成した！<small>ミッションがみんなに公開されます</small></button>
+      <button class="btn stack" data-act="taccuse" ${g.used[me.id] ? 'disabled' : ''}>見破る<small>${g.used[me.id] ? '見破りチャンスはもう使った' : `怪しい人のミッションを3択で当てる（1回だけ・ハズレは${talkPen(s)}）`}</small></button>`;
+  } else {
+    action = '<p class="waiting">会話を続けて、だれかの達成を待とう</p>';
+  }
+  return `${seatStrip()}
+    <section class="k-stage t-stage">
+      <article class="t-theme"><img src="img/t-theme.webp" alt=""><div><span class="k-genre">トークテーマ</span><p class="t-theme-text">${esc(T.themeText(g))}</p></div></article>
+      ${timer}${nt}${mission}
+    </section>
+    <section class="k-actions"><div class="k-act-main">${action}</div></section>
+    ${talkEnd()}`;
+}
+
+function fmtLeft(end) {
+  const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+  return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+}
+
+function talkEnd() {
+  const s = S();
+  const g = s.game;
+  if (g.step !== 'over') return '';
+  const pen = talkPen(s);
+  const nt = g.notice || {};
+  const title = g.winner ? `${nm(g.winner)}の勝ち！` : nt.kind === 'timeup' ? '時間切れ！' : 'ラウンド終了';
+  const sub = g.winner ? `${nt.kind === 'last' ? '最後まで逃げ切り' : 'ミッション達成'} → ほかの全員で${pen}` : `だれも達成できず → 全員で${pen}`;
+  const fl = anim(`${s.created}:${s.round}:talk-end`, 900);
+  const rows = s.players.map((p) => {
+    const stt = g.status[p.id];
+    const label = stt === 'won' ? '勝ち' : stt === 'out' ? 'バレた' : '';
+    return `<li class="t-row ${stt}">${avatar(p, 's')}<div><b>${esc(p.name)}</b>${label ? `<span class="t-st">${label}</span>` : ''}<p>${esc(T.missionText(g.missions[p.id]))}</p></div></li>`;
+  }).join('');
+  return `<div class="overlay end talk-end" role="dialog" aria-label="結果">
+    <figure class="result-art ${fl.cls}" style="${fl.style}"><img src="img/${g.winner ? 't-win' : 't-busted'}.webp" alt=""></figure>
+    <h2 class="loser-name">${title}</h2>
+    <p class="ov-ask">${sub}</p>
+    <h3 class="t-reveal-h">みんなのミッション</h3>
+    <ul class="t-reveal">${rows}</ul>
+    ${isHost() ? '<div class="end-actions"><button class="btn primary big" data-act="again">もう一回（テーマもミッションも新しく）</button><button class="btn" data-act="lobby">メンバーや時間を変える</button></div>' : '<p class="waiting">ホストが次のラウンドを始めるのを待っています</p>'}
+  </div>`;
+}
+
 function viewGame() {
   const s = S();
   const lv = drunkLevel(s);
-  return `<main class="game ${isKioku(s) ? 'kioku' : 'baba'} ${lv > 0 ? 'drunk' : ''}" style="--drunk:${lv.toFixed(2)}">
+  return `<main class="game ${isKioku(s) ? 'kioku' : isTalk(s) ? 'kioku talk' : 'baba'} ${lv > 0 ? 'drunk' : ''}" style="--drunk:${lv.toFixed(2)}">
     ${topBar()}
-    ${isKioku(s) ? viewKioku() : viewBaba()}
+    ${isKioku(s) ? viewKioku() : isTalk(s) ? viewTalk() : viewBaba()}
   </main>`;
 }
 
@@ -1034,11 +1155,53 @@ const RULES_KIOKU = `<h2>記憶無くしちゃダメですか</h2>
 <p class="hint"><b>いなけりゃ貯金、いたら総取り、乾杯なら全員。</b>「だれもいない」を押すとペナルティが1つ貯金されます。貯金に上限はなく、だれも当てはまらないかぎりどんどん溜まります。次に当てはまった人が出たら、貯金ぶんもまとめて受けます（貯金1つで2倍、2つで3倍、5つで6倍…）。<br>
 貯金があるときに「全員で乾杯」のカードが出たら、全員がひとりずつ、乾杯の一杯に貯金ぶんを足して受けます（当てはまった人と同じで、貯金2つなら全員が3倍＝三口ずつ）。分け合いはなし。<br>
 どちらも、受けたら貯金は0に戻ります。</p>`;
+const RULES_TALK = `<h2>トークトライアル</h2>
+<ol class="steps">
+  <li><b>テーマとミッションが届く</b>トークテーマは全員同じ。ひみつのミッション（「誰かが〇〇した時」）は自分だけに届きます。</li>
+  <li><b>テーマに沿って会話</b>さりげなく話を誘導して、だれかにミッションの言葉や動きをさせます。自分でやっても無効。</li>
+  <li><b>起きたら「達成！」</b>ミッションが公開されて勝ち。ほかの全員で一口。</li>
+</ol>
+<p class="hint"><b>見破る</b>：怪しい人のミッションを3択で当てます（1人1ラウンド1回）。当たればその人は脱落して一口、外れたら自分が一口。最後の1人になったら逃げ切りで勝ち。制限時間を過ぎたら全員で一口。</p>`;
 const RULES_COMMON = `<h3>モード</h3>
 <p class="hint"><b>2人モード</b>：参加者がちょうど2人のとき自動で切り替わり、お題が「相手と」「2人で」になります。<br>
 <b>CPU</b>：ロビーの「CPUを呼ぶ」で追加。CPUは自分で引いて、選んで、指名もします。お題の実行は人間が「次へ」を押します。<br>
 <b>ゴリゴリ泥酔モード</b>：ペナルティが二口、縛りが3つまで重なり、記憶には泥酔カードが混ざります。進むほど画面も酔います。一定枚数ごとにチェイサー（お水）が強制で入ります。</p>
 <p class="hint">一気飲みはしない。苦手な人はソフトドリンクや水でOK。答えたくないお題はペナルティでパス。</p>`;
+
+function accuseSheet() {
+  const s = S();
+  const g = s.game;
+  const a = ui.acc || {};
+  const alive = T.alive(s);
+  const by = ui.local ? a.by : me.id;
+  if (!by) {
+    const can = alive.filter((pid) => !g.used[pid]);
+    return `<h2>だれが見破る？</h2><div class="pick-row">${can.map((pid) => `<button class="pick" data-act="tacc-by" data-pid="${pid}">${nm(pid)}</button>`).join('')}</div>${can.length ? '' : '<p class="hint">見破りチャンスが残っている人はいません</p>'}`;
+  }
+  if (!a.target) {
+    const cands = alive.filter((pid) => pid !== by);
+    return `<h2>だれのミッションを見破る？</h2><p class="hint">${ui.local ? `${nm(by)}の見破り。` : ''}チャンスは1回。外れたら${talkPen(s)}。</p>
+      <div class="pick-row">${cands.map((pid) => `<button class="pick" data-act="tacc-target" data-pid="${pid}">${nm(pid)}</button>`).join('')}</div>`;
+  }
+  return `<h2>${nm(a.target)}のミッションはどれ？</h2>
+    <div class="t-opts">${g.options[a.target].map((m) => `<button class="t-opt" data-act="tacc-pick" data-m="${m}">${esc(T.missionText(m))}</button>`).join('')}</div>
+    <button class="btn link" data-act="tacc-back">選び直す</button>`;
+}
+
+function achieveSheet() {
+  const s = S();
+  return `<h2>だれが達成した？</h2><p class="hint">選んだ人のミッションが公開されます。</p>
+    <div class="pick-row">${T.alive(s).map((pid) => `<button class="pick" data-act="tach-who" data-pid="${pid}">${nm(pid)}</button>`).join('')}</div>`;
+}
+
+function peekSheet(pid) {
+  const s = S();
+  const g = s.game;
+  return `<h2>${nm(pid)}だけが見てね</h2>
+    ${ui.peekShow ? `<div class="t-mission open static"><span class="k-genre">ひみつのミッション</span><span class="t-mission-text">${esc(T.missionText(g.missions[pid]))}</span>${g.status[pid] === 'out' ? '<small>（もうバレています）</small>' : ''}</div>
+      <button class="btn primary" data-act="close-sheet">覚えた！ 閉じる</button>`
+      : `<button class="btn primary big" data-act="tpeek-show">${nm(pid)}のミッションを見る</button>`}`;
+}
 
 function viewSheet() {
   const sh = ui.sheet;
@@ -1046,8 +1209,11 @@ function viewSheet() {
   let body = '';
   if (sh.type === 'rules') {
     const kind = sh.kind || kindOf();
-    body = (kind === 'kioku' ? RULES_KIOKU : RULES_BABA) + RULES_COMMON;
+    body = kind === 'talk' ? RULES_TALK : (kind === 'kioku' ? RULES_KIOKU : RULES_BABA) + RULES_COMMON;
   }
+  if (sh.type === 'accuse') body = accuseSheet();
+  if (sh.type === 'achieve') body = achieveSheet();
+  if (sh.type === 'peek') body = peekSheet(sh.pid);
   if (sh.type === 'menu') {
     const s = S();
     const logs = (isKioku(s) ? s?.game?.log?.slice(-10).reverse().map((l) => `<li>${esc(l)}</li>`) : s?.game?.log?.slice(-12).reverse().map((l) => `<li>${esc(l.m)}</li>`))?.join('') || '';
@@ -1058,6 +1224,7 @@ function viewSheet() {
         ${s && inRoom() && !isHost() ? '<button class="btn" data-act="become-host">自分がホストになる</button>' : ''}
         ${s && isHost() && s.phase === 'play' ? '<button class="btn" data-act="lobby-confirm">ゲームを中断してロビーへ</button>' : ''}
         ${s?.game && isHost() && (s.game.rule || s.game.rules?.length) ? '<button class="btn" data-act="clear-rule">縛り・ルールを全部解除</button>' : ''}
+        ${s && isTalk(s) && isHost() && s.game?.step === 'talk' ? '<button class="btn" data-act="tend">このラウンドを終える（勝者なし）</button>' : ''}
         <button class="btn" data-act="leave">ホーム画面に戻る</button>
       </div>
       ${ui.local ? '' : `<p class="hint">接続：${ui.net === 'online' ? 'つながっています' : '再接続中'}（サーバー${(ui.broker ?? 0) + 1}）。ホストのスマホが止まったら、だれかが「自分がホストになる」を押すと代わりに進められます（CPUもその人のスマホが動かします）。</p>`}
@@ -1150,8 +1317,9 @@ document.fonts?.addEventListener?.('loadingdone', () => fitStage());
 setInterval(() => {
   document.querySelectorAll('.timer-num[data-end]').forEach((el) => {
     const left = Math.max(0, Math.ceil((Number(el.dataset.end) - Date.now()) / 1000));
-    if (el.textContent !== String(left)) {
-      el.textContent = left;
+    const txt = el.dataset.fmt === 'ms' ? fmtLeft(Number(el.dataset.end)) : String(left);
+    if (el.textContent !== txt) {
+      el.textContent = txt;
       if (left === 0) { el.closest('.k-timer')?.classList.add('done'); vibrate(200); }
     }
   });
@@ -1165,6 +1333,7 @@ app.addEventListener('input', (e) => {
   if (m === 'code') { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); ui.code = e.target.value; }
   if (m === 'text') ui.text = e.target.value;
   if (m === 'addName') ui.addName = e.target.value;
+  if (m === 'customText') ui.customText = e.target.value;
   if (m === 'penaltyText') {
     ui.penaltyText = e.target.value;
     const btn = app.querySelector('[data-act="penalty"]');
@@ -1175,6 +1344,7 @@ app.addEventListener('input', (e) => {
 app.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target.id === 'in-code') handle('join-code', {});
   if (e.key === 'Enter' && e.target.id === 'in-add') handle('add-local', {});
+  if (e.key === 'Enter' && e.target.id === 'in-custom') handle('custom-add', {});
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); }
 });
 
@@ -1246,7 +1416,35 @@ function handle(act, d) {
       break;
     }
     case 'leave': ui.sheet = null; leaveToHome(); break;
-    case 'start': commit((x) => (isKioku(x) ? K.startGame(x) : L.startGame(x))); break;
+    case 'start': ui.showMission = false; commit((x) => startFor(x)); break;
+    case 'set-min': commit((x) => L.setSettings(x, { minutes: Number(d.m) })); break;
+    case 'custom-add': {
+      const t = (ui.customText || document.getElementById('in-custom')?.value || '').trim();
+      if (commit((x) => K.addCustom(x, t))) { ui.customText = ''; render(); document.getElementById('in-custom')?.focus(); }
+      break;
+    }
+    case 'custom-del': commit((x) => K.removeCustom(x, d.id)); break;
+    case 'tpeek': ui.showMission = !ui.showMission; render(); break;
+    case 'tpeek-who': ui.peekShow = false; ui.sheet = { type: 'peek', pid: d.pid }; render(); break;
+    case 'tpeek-show': ui.peekShow = true; render(); break;
+    case 'tachieve':
+      if (ui.local) { ui.sheet = { type: 'achieve' }; render(); }
+      else if (confirm('ミッション達成を宣言しますか？（全員に公開されます）')) commit((x) => T.achieve(x, me.id));
+      break;
+    case 'tach-who': ui.sheet = null; commit((x) => T.achieve(x, d.pid)); break;
+    case 'taccuse': ui.acc = {}; ui.sheet = { type: 'accuse' }; render(); break;
+    case 'tacc-by': ui.acc = { by: d.pid }; render(); break;
+    case 'tacc-target': ui.acc = { ...ui.acc, target: d.pid }; render(); break;
+    case 'tacc-back': ui.acc = { by: ui.acc?.by }; render(); break;
+    case 'tacc-pick': {
+      const by = ui.local ? ui.acc?.by : me.id;
+      const target = ui.acc?.target;
+      ui.sheet = null;
+      ui.acc = null;
+      commit((x) => T.accuse(x, by, target, Number(d.m)));
+      break;
+    }
+    case 'tend': ui.sheet = null; if (confirm('このラウンドを勝者なしで終えますか？')) commit((x) => T.endRound(x)); break;
     case 'become-host': ui.sheet = null; commit((x) => L.makeHost(x, me.id)); toast('あなたがホストになりました'); break;
     case 'lobby-confirm': ui.sheet = null; if (confirm('ゲームを中断してロビーに戻りますか？')) commit((x) => L.backToLobby(x)); break;
     case 'clear-rule': ui.sheet = null; commit((x) => { const y = JSON.parse(JSON.stringify(x)); y.game.rule = null; y.game.rules = []; return y; }); break;
@@ -1267,7 +1465,7 @@ function handle(act, d) {
     case 'finish-drank': if (iAct()) commit((x) => L.finishOdai(x, who, Math.random, { drank: true })); break;
     case 'preset': ui.penaltyText = d.t; render(); break;
     case 'penalty': if (iAct()) commit((x) => L.setPenalty(x, who, ui.penaltyText)); break;
-    case 'again': ui.penaltyText = ''; commit((x) => (isKioku(x) ? K.startGame(x) : L.startGame(x))); break;
+    case 'again': ui.penaltyText = ''; ui.showMission = false; commit((x) => startFor(x)); break;
     case 'lobby': commit((x) => L.backToLobby(x)); break;
     case 'card': ui.sheet = { type: 'card', card: d.card }; render(); break;
     case 'raise': {
@@ -1300,7 +1498,12 @@ document.addEventListener('visibilitychange', () => {
 });
 let resizeT = null;
 window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(render, 120); });
-setInterval(() => { scheduleCpu(); if (BOT) scheduleBot(); }, 1500);
+setInterval(() => {
+  scheduleCpu();
+  if (BOT) scheduleBot();
+  const s = S();
+  if (s && isTalk(s) && isHost() && s.game?.step === 'talk' && s.game.endsAt && Date.now() >= s.game.endsAt) commit((x) => T.timeUp(x));
+}, 1000);
 
 // ---------- テスト用の窓口 ----------
 window.render_game_to_text = () => {
@@ -1314,7 +1517,8 @@ window.render_game_to_text = () => {
     duo: g?.duo ?? null, hard: g?.hard ?? null,
     fx: { count: FX.fxState.count, last: FX.fxState.last, sound: FX.fxState.sound },
   };
-  if (isKioku(s) && g) Object.assign(base, { turn: g.turn, card: g.card, text: K.currentCard(s)?.t ?? null, remaining: K.remaining(s), n: g.n, rules: g.rules, committed: g.committed, pot: g.pot ?? 0, notice: g.notice ?? null, hit: K.isHitCard(K.currentCard(s)), toast: K.isToastCard(K.currentCard(s)) });
+  if (isTalk(s) && g) Object.assign(base, { theme: T.themeText(g), myMission: g.missions[me.id] ?? null, status: g.status, used: g.used, winner: g.winner, notice: g.notice, endsAt: g.endsAt, showMission: !!ui.showMission });
+  else if (isKioku(s) && g) Object.assign(base, { turn: g.turn, card: g.card, text: K.currentCard(s)?.t ?? null, remaining: K.remaining(s), n: g.n, rules: g.rules, committed: g.committed, pot: g.pot ?? 0, notice: g.notice ?? null, hit: K.isHitCard(K.currentCard(s)), toast: K.isToastCard(K.currentCard(s)) });
   else if (g) Object.assign(base, { turn: g.turn, target: L.drawTarget(s), myHand: g.hands[me.id] ?? null, finished: g.finished, loser: g.loser, penalty: g.penalty, pair: g.pair ? { by: g.pair.by, cards: g.pair.cards, chosen: g.pair.chosen, committed: g.pair.committed } : null });
   return JSON.stringify(base);
 };

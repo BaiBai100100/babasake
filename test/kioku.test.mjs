@@ -215,6 +215,31 @@ test('勝負のカードで「飲んだ！」→ lastDrink を残す（セーフ
   assert.equal(s.game.lastHit, undefined);
 });
 
+test('マイお題：ロビーで追加・削除でき、山札に混ざって表示される', () => {
+  let s = room(3, 'k1');
+  s = K.addCustom(s, '  ハイボールを頼んだ人  ');
+  s = K.addCustom(s, '消すお題');
+  assert.equal(s.settings.custom.length, 2);
+  s = K.removeCustom(s, s.settings.custom[1].id);
+  assert.equal(s.settings.custom.length, 1);
+  assert.throws(() => K.addCustom(s, '   '), /お題を入れて/);
+  s = K.startGame(s, rng(12));
+  assert.equal(K.remaining(s), K.deckFor('k1').length + 1);
+  const id = s.settings.custom[0].id;
+  s.game.deck = [id, ...s.game.deck.filter((x) => x !== id)];
+  s = K.draw(s, s.game.turn);
+  assert.equal(K.currentCard(s).t, 'ハイボールを頼んだ人');
+  assert.equal(K.currentCard(s).g, 'customhit');
+  assert.ok(K.isHitCard(K.currentCard(s)));
+  s = K.none(s, s.game.turn);
+  assert.equal(s.game.pot, 1);
+  assert.equal(s.game.step, 'draw');
+  // 「人」で終わらないお題はそのまま実行するカード
+  let u = K.addCustom(room(2, 'k2'), '右どなりの人と腕を組んで一口');
+  u = K.startGame(u, rng(4));
+  assert.equal(K.cardView(u.settings.custom[0].id, u.game).g, 'custom');
+});
+
 test('ペナルティの倍数表示', () => {
   assert.equal(K.penaltyText('一口飲む', 1), '一口飲む');
   assert.equal(K.penaltyText('一口飲む', 3), '三口飲む');

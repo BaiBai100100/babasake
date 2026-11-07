@@ -1,5 +1,5 @@
 // 記憶無くしちゃダメですか：山札から1枚引いて、書いてあることに従う
-import { KIOKU_CARDS, KIOKU_BY_ID, HARD_CARDS, WATER_CARD, WATER_EVERY, GENRES } from './kioku-data.js';
+import { KIOKU_CARDS, KIOKU_BY_ID, HARD_CARDS, WATER_CARD, WATER_EVERY, GENRES, CUSTOM_MAX } from './kioku-data.js';
 import { shuffle, nameOf } from './logic.js';
 import { makeTopic, fillTopic } from './games.js';
 
@@ -31,15 +31,37 @@ const MAX_RULES_HARD = 3;
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const fail = (m) => { throw new Error(m); };
 
-export function deckFor(deck, { hard = false } = {}) {
+export function deckFor(deck, { hard = false, custom = [] } = {}) {
   const sets = deck === 'k1' ? [1] : deck === 'k2' ? [2] : [1, 2];
   const ids = KIOKU_CARDS.filter((c) => sets.includes(c.set)).map((c) => c.id);
-  return hard ? [...ids, ...HARD_CARDS.map((c) => c.id)] : ids;
+  return [...ids, ...(hard ? HARD_CARDS.map((c) => c.id) : []), ...custom.map((c) => c.id)];
+}
+
+// マイお題（部屋ごとに作ったカード）
+export { CUSTOM_MAX };
+export const CUSTOM_HIT = /人[。！!？?]*$/;
+export function addCustom(s0, text) {
+  const s = clone(s0);
+  if (s.phase !== 'lobby') fail('マイお題はロビーで追加できます');
+  const t = String(text || '').trim().slice(0, 50);
+  if (!t) fail('お題を入れてください');
+  const list = s.settings?.custom || [];
+  if (list.length >= CUSTOM_MAX) fail(`マイお題は${CUSTOM_MAX}枚までです`);
+  const id = `KC-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
+  s.settings = { ...(s.settings || {}), custom: [...list, { id, t }] };
+  return s;
+}
+export function removeCustom(s0, id) {
+  const s = clone(s0);
+  s.settings = { ...(s.settings || {}), custom: (s.settings?.custom || []).filter((c) => c.id !== id) };
+  return s;
 }
 
 // 2人モード・泥酔モードを反映したカードの中身
 export function cardView(id, g) {
-  const c = KIOKU_BY_ID[id];
+  const cu = g?.custom?.find((x) => x.id === id);
+  // 「〜な人」で終わるマイお題は当てはまり型（だれもいない→貯金も使える）
+  const c = cu ? { id, set: 'C', g: CUSTOM_HIT.test(cu.t) ? 'customhit' : 'custom', t: cu.t } : KIOKU_BY_ID[id];
   if (!c) return null;
   let t = (g?.duo && c.t2) || c.t;
   if (g?.hard) t = t.replace(/一口/g, '二口');
@@ -71,14 +93,15 @@ export function startGame(s0, rng = Math.random) {
   const s = clone(s0);
   if (s.players.length < MIN_PLAYERS) fail(`${MIN_PLAYERS}人以上で始められます`);
   const hard = !!s.settings?.hard;
-  const deck = shuffle(deckFor(s.settings?.deck || 'k1', { hard }), rng);
+  const custom = (s.settings?.custom || []).slice(0, CUSTOM_MAX);
+  const deck = shuffle(deckFor(s.settings?.deck || 'k1', { hard, custom }), rng);
   s.phase = 'play';
   s.round = (s.round || 0) + 1;
   s.game = {
     deck, pos: 0, step: 'draw', card: null, picks: [], text: null, committed: false,
     turn: s.players[Math.floor(rng() * s.players.length)].id,
     rules: [], timer: null, n: 0, log: [], history: [], pot: 0, notice: null,
-    duo: s.players.length === 2, hard,
+    duo: s.players.length === 2, hard, custom,
   };
   log(s, `第${s.round}ゲーム開始（${deck.length}枚${s.game.duo ? '・2人モード' : ''}${hard ? '・泥酔モード' : ''}）`);
   return s;
@@ -217,7 +240,7 @@ function advance(s, pid) {
 export function reshuffle(s0, rng = Math.random) {
   const s = clone(s0);
   const g = s.game;
-  g.deck = shuffle(deckFor(s.settings?.deck || 'k1', { hard: g.hard }), rng);
+  g.deck = shuffle(deckFor(s.settings?.deck || 'k1', { hard: g.hard, custom: g.custom || [] }), rng);
   g.pos = 0;
   g.step = 'draw';
   g.card = null;

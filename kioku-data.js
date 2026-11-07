@@ -16,7 +16,10 @@ export const GENRES = {
   kanpai: { label: '乾杯・飲む', img: 'g-kanpai' },
   chaos: { label: '泥酔', img: 'g-chaos' },
   water: { label: 'チェイサー', img: 'g-water' },
+  custom: { label: 'マイお題', img: 'g-custom' },
+  customhit: { label: 'マイお題', img: 'g-custom', foot: 'hit' },
 };
+export const CUSTOM_MAX = 30;
 
 const S1 = [
   // 当てはまった人
