@@ -251,6 +251,7 @@ export function removeMid(s0, pid) {
   s.players = s.players.filter((p) => p.id !== pid);
   if (s.hostId === pid) s.hostId = s.players.find((p) => !p.cpu)?.id ?? s.players[0].id;
   g.rules = (g.rules || []).filter((r) => r.until !== pid);
+  g.picks = (g.picks || []).filter((x) => x !== pid);
   g.duo = s.players.length === 2;
   if (g.turn === pid) {
     g.turn = next;

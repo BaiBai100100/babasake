@@ -275,3 +275,10 @@ test('罰ゲームルーレット：候補8つ・結果は候補の中・state �
   assert.deepEqual(s.game.roulette, r);
   assert.equal(s.game.penalty, r.items[r.at]);
 });
+
+test('ロビーでホストが抜けたら、CPUではなく人間がホストになる', () => {
+  let s = L.addCpu(lobby(1));
+  s = L.addPlayer(s, { id: 'p9', name: 'P9' });
+  s = L.removePlayer(s, 'p0');
+  assert.equal(s.hostId, 'p9');
+});

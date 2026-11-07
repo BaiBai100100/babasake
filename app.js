@@ -230,12 +230,55 @@ function newer(a, b) {
   return String(a.by) > String(b.by);
 }
 
+// ---------- 受け取った状態の確認 ----------
+// 公開の中継サーバーはだれでも書き込めるので、受け取ったものは確かめてから使う。
+// 文字列の < > " は全角にしておく（画面の HTML や属性に、そのまま差し込まれても効かない）
+const KINDS = new Set(['baba', 'kioku', 'talk', 'ng']);
+const ID_RE = /^[\w-]{1,40}$/;
+const FULLWIDTH = { '<': '＜', '>': '＞', '"': '＂' };
+function cleanStrings(x, depth = 0) {
+  if (depth > 14) return null;
+  if (typeof x === 'string') return x.replace(/[<>"]/g, (c) => FULLWIDTH[c]);
+  if (Array.isArray(x)) return x.map((v) => cleanStrings(v, depth + 1));
+  if (x && typeof x === 'object') {
+    const o = {};
+    for (const [k, v] of Object.entries(x)) o[cleanStrings(k, depth + 1)] = cleanStrings(v, depth + 1);
+    return o;
+  }
+  return x;
+}
+function validState(s) {
+  if (!s || typeof s !== 'object' || !Number.isFinite(s.v) || !Array.isArray(s.players)) return false;
+  if (!ID_RE.test(String(s.hostId))) return false;
+  return s.players.every((p) => p && ID_RE.test(String(p.id)) && typeof p.name === 'string' && (!p.cpu || CPU_BY_KEY[p.cpu]));
+}
+
 let healAt = 0;
-function onRemoteState(s, retained) {
-  if (!s || !s.v || !s.players || ui.local) return;
+let pending = null; // 自分が最後に出した手 { fn, v, ts, silent, tries }。同時に押して負けたら、新しい状態に当て直す
+let oldAppWarned = false;
+function onRemoteState(raw, retained) {
+  if (!raw || ui.local) return;
+  if (raw.kind && !KINDS.has(raw.kind)) {
+    if (!oldAppWarned) { oldAppWarned = true; toast('この部屋は新しい版のアプリで作られています。ページを読み込み直してね', 6000); }
+    return;
+  }
+  if (!validState(raw)) return;
+  const s = cleanStrings(raw);
+  if (s.kind === 'kioku' && s.game && ![s.game.card, ...(s.game.deck || [])].every((id) => !id || K.cardView(id, s.game))) {
+    if (!oldAppWarned) { oldAppWarned = true; toast('この部屋は新しい版のアプリで作られています。ページを読み込み直してね', 6000); }
+    return;
+  }
   ui.syncUntil = 0; // 部屋の状態が1つでも届いたら、つながり直し後の待ちは終わり
+  let redo = null;
+  if (pending && s.v >= pending.v) {
+    // 自分の手が戻ってきただけでは消さない（そのあとに、同じ版の相手の手が届くことがある）
+    const mine = s.by === me.id && s.ts === pending.ts;
+    if (!mine && s.v === pending.v && newer(s, ui.state)) { redo = pending; pending = null; } // 同時に押して負けた
+    else if (s.v > pending.v || Date.now() - pending.ts > 8000) pending = null;
+  }
   if (ui.state && !newer(s, ui.state)) {
-    if (retained && newer(ui.state, s) && Date.now() - healAt > 1500) {
+    // 古い状態が回ってきた（retained が古いまま残っている等）→ 手元の新しい状態を出し直して直す
+    if (newer(ui.state, s) && Date.now() - healAt > 1500) {
       healAt = Date.now();
       ui.room?.publishState(ui.state);
     }
@@ -243,11 +286,18 @@ function onRemoteState(s, retained) {
   }
   const prev = ui.state;
   ui.state = s;
-  afterStateChange(prev, s);
-  render();
+  try {
+    afterStateChange(prev, s);
+    render();
+  } catch (e) {
+    console.warn('render failed', e);
+    ui.sheet = null;
+    try { render(); } catch { /* noop */ }
+  }
+  if (redo && redo.tries < 2) setTimeout(() => commit(redo.fn, { silent: redo.silent, tries: redo.tries + 1 }), 0);
 }
 
-function commit(fn) {
+function commit(fn, { silent = false, tries = 0 } = {}) {
   if (!S()) return false;
   // 切れている間・つながり直した直後（最新の状態を受け取るまで）は押せない。古い状態から作った手で、みんなの進行を巻き戻さないため
   if (!ui.local && ui.room && (ui.net !== 'online' || Date.now() < ui.syncUntil)) {
@@ -259,27 +309,57 @@ function commit(fn) {
     if (ui.net !== 'online') ui.room.nudge();
     return false;
   }
+  let next;
   try {
-    const next = fn(S());
-    next.v = S().v + 1;
-    next.ts = Date.now();
-    next.by = me.id;
-    const prev = S();
-    ui.state = next;
-    if (ui.local) store.set('local', JSON.stringify(next));
-    else ui.room?.publishState(next);
-    afterStateChange(prev, next);
-    render();
-    return true;
+    next = fn(S());
   } catch (e) {
-    toast(e.message || String(e));
+    // 同時に押して当て直したときに通らなくなった手は、そう伝える（自動の手は黙って捨てる）
+    if (!silent) toast(tries ? `ほぼ同時に操作があったので、反映されませんでした（${e.message || e}）` : (e.message || String(e)));
     return false;
   }
+  next.v = S().v + 1;
+  next.ts = Date.now();
+  next.by = me.id;
+  const prev = S();
+  if (!ui.local) {
+    // 送れなかったら手元も進めない（あとで古い状態として送られて、みんなの進行を巻き戻すのを防ぐ）
+    if (!ui.room?.publishState(next)) {
+      if (!silent) toast('送れませんでした。もう一度押してね');
+      ui.room?.nudge();
+      return false;
+    }
+    pending = { fn, v: next.v, ts: next.ts, silent, tries };
+  } else store.set('local', JSON.stringify(next));
+  ui.state = next;
+  afterStateChange(prev, next);
+  render();
+  return true;
 }
 
 function afterStateChange(prev, s) {
   let stampDelay = 0;
   const g = s.game;
+  // ラウンド・場面が変わったら、前のラウンドの画面の状態を持ち越さない
+  if (prev && (prev.round !== s.round || prev.phase !== s.phase || prev.created !== s.created)) {
+    if (['accuse', 'achieve', 'peek', 'kickmid', 'card'].includes(ui.sheet?.type)) ui.sheet = null;
+    ui.acc = null;
+    if (prev.round !== s.round || prev.created !== s.created) {
+      ui.showMission = false;
+      ui.raised = {};
+      ui.hover = null;
+    }
+  }
+  // ロビーで外された → 勝手に入り直さない。
+  // 同じ版どうしの食い違い（自分の参加が同時の操作に負けただけ）は外されたことにしない
+  if (prev && !ui.local && s.phase === 'lobby' && s.v > prev.v && s.by !== me.id && prev.players.some((p) => p.id === me.id) && !s.players.some((p) => p.id === me.id)) {
+    ui.wantJoin = false;
+    toast('ホストに部屋から外されました', 3500);
+  }
+  // ババ酒：浮かせたカードが手札から出ていったら、浮かせを消す（残ると、戻ってきたときに位置がばれる）
+  if (!ui.local && kindOf(s) === 'baba' && ui.raised[me.id] && !g?.hands?.[me.id]?.includes(ui.raised[me.id])) {
+    ui.raised[me.id] = null;
+    ui.room?.publishRaise(null);
+  }
   const pg = prev?.game;
   if (s.phase === 'lobby' && ui.wantJoin && !ui.local && !s.players.some((p) => p.id === me.id)) scheduleJoin();
   const turnKey = (x) => `${x?.round}:${x?.game?.seq ?? x?.game?.n}:${x?.game?.step}`;
@@ -324,7 +404,7 @@ function afterStateChange(prev, s) {
   const drink = drinkOf(prev, s);
   if (drink && stampDelay) setTimeout(() => FX.playDrink(drink), stampDelay);
   else if (drink) FX.playDrink(drink);
-  const myTurn = (x) => x?.phase === 'play' && !isTalk(x) && actorOf(x) === me.id;
+  const myTurn = (x) => x?.phase === 'play' && !isChat(x) && actorOf(x) === me.id;
   if (myTurn(s) && !myTurn(prev)) vibrate([70, 40, 70]);
   document.title = myTurn(s) && !ui.local ? '● あなたの番｜NOMIKAI CARDS' : 'NOMIKAI CARDS';
   keepAwake(s.phase === 'play' || s.phase === 'over');
@@ -381,15 +461,18 @@ function scheduleJoin() {
   if (joinTimer) return;
   joinTimer = setTimeout(() => {
     joinTimer = null;
-    if (S()?.phase === 'lobby' && !inRoom()) commit((s) => L.addPlayer(s, me));
+    if (S()?.phase === 'lobby' && !inRoom() && ui.wantJoin) commit((s) => L.addPlayer(s, me), { silent: true });
   }, 250 + Math.random() * 600);
 }
 
 function onLive(d) {
-  if (d.k === 'hover' && d.from !== me.id) { ui.hover = d; render(); }
+  d = cleanStrings(d);
+  if (d?.k === 'hover' && d.from !== me.id) { ui.hover = d; render(); }
 }
 function onRaise(pid, d) {
-  ui.raised[pid] = d?.card || null;
+  if (!ID_RE.test(String(pid))) return;
+  const card = cleanStrings(d?.card);
+  ui.raised[pid] = typeof card === 'string' && /^[A-Z0-9]{1,4}$/.test(card) ? card : null;
   render();
 }
 
@@ -485,7 +568,7 @@ async function joinRoom(code, broker = null, { silent = false } = {}) {
     const room = makeRoom(code, b);
     try { await room.connect(); } catch { continue; }
     const st = await waitForState(room, 3000);
-    if (!st) { room.close(); continue; }
+    if (!st || !validState(st)) { room.close(); continue; }
     ui.local = false;
     ui.wantJoin = true;
     enterRoom(room);
@@ -494,7 +577,7 @@ async function joinRoom(code, broker = null, { silent = false } = {}) {
     } else if (st.players.find((p) => p.id === me.id).name !== me.name && st.phase === 'lobby') {
       commit((s) => L.addPlayer(s, me));
     }
-    afterStateChange(null, S() || st);
+    afterStateChange(null, S() || cleanStrings(st));
     render();
     return;
   }
@@ -568,7 +651,7 @@ function cpuAct() {
       return;
     }
     const idx = ui.hover && ui.hover.seq === g.seq ? ui.hover.idx : 0;
-    commit((x) => L.draw(x, a, idx));
+    commit((x) => L.draw(x, a, idx), { silent: true });
     return;
   }
   const act = isKioku(s) ? K.autoAction(s) : L.autoAction(s);
@@ -576,7 +659,7 @@ function cpuAct() {
   if (act.type === 'commit' && act.input?.text) act.input.text = ['語尾に「ピヨ」', '乾杯は英語で', 'あだ名で呼び合う'][Math.floor(Math.random() * 3)];
   // CPU が罰ゲームを決めるときは、いつもルーレット（見ていて楽しいので）
   if (act.type === 'penalty') { act.roulette = L.makeRoulette(); act.text = act.roulette.items[act.roulette.at]; }
-  commit((x) => (isKioku(x) ? K.applyAction(x, act) : L.applyAction(x, act)));
+  commit((x) => (isKioku(x) ? K.applyAction(x, act) : L.applyAction(x, act)), { silent: true });
 }
 
 // ---------- 自動操作（テスト用 ?bot=1） ----------
@@ -733,7 +816,7 @@ function viewLobby() {
     </section>
     ${settings}
     <section class="lobby-actions">
-      ${!inRoom() ? '<p class="hint">参加中…</p>' : host
+      ${!inRoom() ? (ui.wantJoin ? '<p class="hint">参加中…</p>' : '<button class="btn primary big" data-act="rejoin">もう一度参加する</button>') : host
         ? `<button class="btn primary big" data-act="start" ${canStart ? '' : 'disabled'}>${canStart ? 'ゲームを始める' : `あと${minPlayers(s) - n}人${isChat(s) ? '' : '（CPUでもOK）'}`}</button>`
         : '<p class="waiting">ホストが始めるのを待っています</p>'}
       <button class="btn link" data-act="leave">${ui.local ? 'ホームに戻る' : '部屋を出る'}</button>
@@ -1347,6 +1430,8 @@ function viewSheet() {
     const kind = sh.kind || kindOf();
     body = kind === 'ng' ? RULES_NG : kind === 'talk' ? RULES_TALK : (kind === 'kioku' ? RULES_KIOKU : RULES_BABA) + RULES_COMMON;
   }
+  const playing = S()?.phase === 'play' && S()?.game;
+  if (!playing && ['accuse', 'achieve', 'peek', 'kickmid'].includes(sh.type)) { ui.sheet = null; return ''; }
   if (sh.type === 'accuse') body = accuseSheet();
   if (sh.type === 'achieve') body = achieveSheet();
   if (sh.type === 'peek') body = peekSheet(sh.pid);
@@ -1358,7 +1443,7 @@ function viewSheet() {
   }
   if (sh.type === 'menu') {
     const s = S();
-    const logs = (isKioku(s) ? s?.game?.log?.slice(-10).reverse().map((l) => `<li>${esc(l)}</li>`) : s?.game?.log?.slice(-12).reverse().map((l) => `<li>${esc(l.m)}</li>`))?.join('') || '';
+    const logs = (isKioku(s) ? s?.game?.log?.slice(-10).reverse().map((l) => `<li>${esc(l)}</li>`) : s?.game?.log?.slice(-12).reverse().map((l) => `<li>${esc(typeof l === 'string' ? l : l?.m)}</li>`))?.join('') || '';
     body = `<h2>メニュー</h2>
       <div class="menu-list">
         <button class="btn" data-act="rules">遊び方</button>
@@ -1543,6 +1628,7 @@ function handle(act, d) {
     }
     case 'move': commit((x) => L.movePlayer(x, d.pid, Number(d.d))); break;
     case 'kick': commit((x) => L.removePlayer(x, d.pid)); break;
+    case 'rejoin': ui.wantJoin = true; scheduleJoin(); render(); break;
     case 'kickmid-menu': ui.sheet = { type: 'kickmid' }; render(); break;
     case 'kick-mid':
       ui.sheet = null;
@@ -1672,7 +1758,11 @@ setInterval(() => {
   scheduleCpu();
   if (BOT) scheduleBot();
   const s = S();
-  if (s && isChat(s) && isHost() && s.game?.step === 'talk' && s.game.endsAt && Date.now() >= s.game.endsAt) commit((x) => (isNg(x) ? N.timeUp(x) : T.timeUp(x)));
+  // 時間切れはホストが確定。ホストのスマホが寝ていたら、3秒後に部屋のだれかが代わりに確定する
+  const end = s?.game?.endsAt;
+  if (s && isChat(s) && s.game?.step === 'talk' && end && Date.now() >= end && (isHost() || (inRoom() && Date.now() >= end + 3000))) {
+    commit((x) => (isNg(x) ? N.timeUp(x) : T.timeUp(x)), { silent: true });
+  }
 }, 1000);
 
 // ---------- テスト用の窓口 ----------
@@ -1693,7 +1783,7 @@ window.render_game_to_text = () => {
   else if (g) Object.assign(base, { turn: g.turn, target: L.drawTarget(s), myHand: g.hands[me.id] ?? null, finished: g.finished, loser: g.loser, penalty: g.penalty, pair: g.pair ? { by: g.pair.by, cards: g.pair.cards, chosen: g.pair.chosen, committed: g.pair.committed } : null });
   return JSON.stringify(base);
 };
-window.__bb = { ui, L, K, me, commit, FX }; // commit はテストで山札を仕込むため
+window.__bb = { ui, L, K, T, N, me, commit, FX }; // commit はテストで山札を仕込むため
 
 // ---------- 起動 ----------
 render();

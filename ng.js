@@ -49,10 +49,11 @@ export function startGame(s0, rng = Math.random, now = Date.now()) {
 }
 
 // seen = 押した人の画面に出ていた言葉。同時に2人が押しても、2回目は「もう変わっています」で弾く
-export function callOut(s0, by, target, seen, rng = Math.random) {
+export function callOut(s0, by, target, seen, rng = Math.random, now = Date.now()) {
   const s = clone(s0);
   const g = s.game;
   if (g?.step !== 'talk') fail('いまは会話中ではありません');
+  if (g.endsAt && now >= g.endsAt) fail('時間切れです');
   if (by === target) fail('自分のNGワードは見えません');
   if (!(target in g.words)) fail('その人は参加していません');
   if (g.words[target] !== seen) fail('もう新しいNGワードに変わっています');

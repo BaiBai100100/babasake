@@ -26,7 +26,7 @@ test('始めると全員に別々のNGワード（10人でも）', () => {
 });
 
 test('言った！：一口ぶん数えて、新しい言葉に替わる（いま他の人が持つ言葉・さっきの言葉にはならない）', () => {
-  let s = N.startGame(room(4), rng(3), 0);
+  let s = N.startGame(room(4), rng(3), Date.now());
   for (let k = 0; k < 40; k++) {
     const target = 'p' + (1 + (k % 3));
     const old = s.game.words[target];
@@ -42,7 +42,7 @@ test('言った！：一口ぶん数えて、新しい言葉に替わる（い�
 });
 
 test('同時に押しても1回だけ／自分は押せない', () => {
-  let s = N.startGame(room(3), rng(9), 0);
+  let s = N.startGame(room(3), rng(9), Date.now());
   const w = s.game.words.p1;
   s = N.callOut(s, 'p0', 'p1', w, rng(1));
   assert.throws(() => N.callOut(s, 'p2', 'p1', w), /もう新しい/);
@@ -50,12 +50,13 @@ test('同時に押しても1回だけ／自分は押せない', () => {
 });
 
 test('時間切れ・終了：いちばん言った人が出る', () => {
-  let s = N.startGame(room(3, { minutes: 3 }), rng(4), 1000);
+  const T0 = Date.now();
+  let s = N.startGame(room(3, { minutes: 3 }), rng(4), T0);
   s = N.callOut(s, 'p0', 'p2', s.game.words.p2, rng(2));
   s = N.callOut(s, 'p1', 'p2', s.game.words.p2, rng(3));
   s = N.callOut(s, 'p2', 'p0', s.game.words.p0, rng(4));
-  assert.throws(() => N.timeUp(s, 2000), /まだ時間/);
-  s = N.timeUp(s, 1000 + 3 * 60000);
+  assert.throws(() => N.timeUp(s, T0 + 1000), /まだ時間/);
+  s = N.timeUp(s, T0 + 3 * 60000);
   assert.equal(s.phase, 'over');
   assert.deepEqual(s.game.worst, ['p2']);
   const t = N.endRound(N.startGame(room(2, { minutes: 0 }), rng(5), 0));
@@ -64,7 +65,7 @@ test('時間切れ・終了：いちばん言った人が出る', () => {
 });
 
 test('途中で抜ける：その人のワードと回数が消え、結果にも出ない', () => {
-  let s = N.startGame(room(3), rng(51), 0);
+  let s = N.startGame(room(3), rng(51), Date.now());
   s = N.callOut(s, 'p0', 'p2', s.game.words.p2, rng(1));
   s = N.callOut(s, 'p0', 'p2', s.game.words.p2, rng(2));
   s = N.removeMid(s, 'p2');
@@ -72,4 +73,9 @@ test('途中で抜ける：その人のワードと回数が消え、結果に�
   assert.throws(() => N.callOut(s, 'p0', 'p2', 0), /参加していません/);
   s = N.endRound(s);
   assert.deepEqual(s.game.worst, []);
+});
+
+test('時間切れのあとは「言った！」できない', () => {
+  const s = N.startGame(room(3, { minutes: 3 }), rng(71), 0);
+  assert.throws(() => N.callOut(s, 'p0', 'p1', s.game.words.p1, Math.random, 3 * 60000), /時間切れ/);
 });

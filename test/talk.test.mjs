@@ -110,3 +110,13 @@ test('途中で抜ける：残りが1人になったら逃げ切り', () => {
   assert.equal(s.game.notice.kind, 'last');
   assert.throws(() => T.removeMid(s, 'p1'), /少なく/);
 });
+
+test('外した人は見破れない／時間切れのあとは達成・見破りできない', () => {
+  let s = T.startGame(room(4), rng(61));
+  s = T.removeMid(s, 'p3');
+  assert.equal(s.game.status.p3, 'gone');
+  assert.throws(() => T.accuse(s, 'p0', 'p3', s.game.missions.p3), /もう|いません|バレ/);
+  const u = T.startGame(room(3, { minutes: 3 }), rng(62), 0);
+  assert.throws(() => T.achieve(u, 'p0', 3 * 60000), /時間切れ/);
+  assert.throws(() => T.accuse(u, 'p0', 'p1', u.game.missions.p1, 3 * 60000), /時間切れ/);
+});

@@ -57,23 +57,26 @@ function finish(s, winner, kind) {
   g.notice = { kind, who: winner, n: ++g.n };
 }
 
-export function achieve(s0, pid) {
+export function achieve(s0, pid, now = Date.now()) {
   const s = clone(s0);
   const g = s.game;
   if (g?.step !== 'talk') fail('いまは会話中ではありません');
+  if (g.endsAt && now >= g.endsAt) fail('時間切れです');
   if (g.status[pid] !== 'play') fail('バレた人は達成できません');
   log(s, `${nameOf(s, pid)}がミッション達成：${MISSIONS[g.missions[pid]]}`);
   finish(s, pid, 'won');
   return s;
 }
 
-export function accuse(s0, by, target, mission) {
+export function accuse(s0, by, target, mission, now = Date.now()) {
   const s = clone(s0);
   const g = s.game;
   if (g?.step !== 'talk') fail('いまは会話中ではありません');
+  if (g.endsAt && now >= g.endsAt) fail('時間切れです');
   if (g.status[by] !== 'play') fail('バレた人は見破れません');
   if (g.used[by]) fail('見破りチャンスは1ラウンド1回です');
   if (by === target) fail('自分は見破れません');
+  if (!s.players.some((p) => p.id === target)) fail('その人はもういません');
   if (g.status[target] !== 'play') fail('その人はもうバレています');
   if (!g.options[target]?.includes(mission)) fail('その選択肢はありません');
   g.used[by] = true;
@@ -113,6 +116,7 @@ export function removeMid(s0, pid) {
   if (s.players.length - 1 < MIN_PLAYERS) fail(`${MIN_PLAYERS}人より少なくなるので外せません`);
   log(s, `${nameOf(s, pid)}が途中で抜けた`);
   s.players = s.players.filter((p) => p.id !== pid);
+  if (g.status?.[pid] === 'play') g.status[pid] = 'gone';
   if (s.hostId === pid) s.hostId = s.players.find((p) => !p.cpu)?.id ?? s.players[0].id;
   if (g.step === 'talk') {
     const left = alive(s);

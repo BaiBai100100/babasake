@@ -53,7 +53,7 @@ export function removePlayer(s0, pid) {
   const s = clone(s0);
   if (s.phase !== 'lobby') fail('ゲーム中は抜けられません');
   s.players = s.players.filter((p) => p.id !== pid);
-  if (s.hostId === pid && s.players.length) s.hostId = s.players[0].id;
+  if (s.hostId === pid && s.players.length) s.hostId = (s.players.find((p) => !p.cpu) || s.players[0]).id;
   return s;
 }
 
