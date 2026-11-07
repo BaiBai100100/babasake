@@ -2,6 +2,8 @@
 // playDrink({ kind: 'solo' | 'multi', water, mult })
 //   solo  … グラスひとつ：飛び出す → ゴクッ、ゴクッ → プハーッ！
 //   multi … グラスふたつ：左右から飛んできてカチン → カンパーイ！
+//   mult ≥ MEGA_AT（貯金が大きい）… 特大演出：ドラムロールで「×N」がカウントアップ → ドーン！で
+//   ファンファーレ・歓声、下からビールの波、紙吹雪の雨、画面フラッシュ
 
 const INK = '#1b1a22';
 const PAPER = '#fdf8f0';
@@ -9,6 +11,15 @@ const PINK = '#fb3ea8';
 const BLUE = '#1c3cc2';
 const BLUE_L = '#d6defb';
 const DUR = { solo: 2000, multi: 1700 }; // 演出の長さ（ms）
+export const MEGA_AT = 5; // この倍率から特大演出
+const MEGA_Z = { solo: 1260, multi: 380 }; // 特大演出のカウントアップが始まる時刻（ms）
+const MEGA_COUNT = 900; // カウントアップの長さ → ここで「ドーン！」
+const MEGA_LEN = 2600; // カウントアップ開始から終わりまで
+export const isMega = (mult) => mult >= MEGA_AT;
+export const megaWord = (mult) => (mult >= 10 ? '伝説の一杯！' : '貯金ドーン！');
+export function totalMs(kind, mult = 1) {
+  return isMega(mult) ? MEGA_Z[kind] + MEGA_LEN : DUR[kind];
+}
 
 const KEY = 'babasake:sound';
 export const fxState = { count: 0, last: null, sound: readSound() };
@@ -155,7 +166,82 @@ function pop(ctx, t, out) {
   tone(ctx, out, { f0: 520, f1: 1300, t, a: 0.003, d: 0.09, peak: 0.28, glide: 0.06 });
   return t + 0.12;
 }
-export const SOUNDS = { clink, fizz, gulp, puhaa, pop };
+// ドラムロール：だんだん速く、強く
+function drumroll(ctx, t, out, dur = MEGA_COUNT / 1000) {
+  let x = 0;
+  let gap = 0.075;
+  while (x < dur - 0.02) {
+    const k = x / dur;
+    hiss(ctx, out, { t: t + x, a: 0.002, d: 0.045, peak: 0.16 + k * 0.32, filters: [{ type: 'bandpass', f: 240 + k * 160, q: 0.9 }] });
+    tone(ctx, out, { f0: 130, f1: 70, t: t + x, a: 0.002, d: 0.05, peak: 0.12 + k * 0.28 });
+    x += gap;
+    gap = Math.max(0.03, gap * 0.92);
+  }
+  return t + dur;
+}
+// ブラス風の音（ファンファーレ用）
+function brass(ctx, out, f, t, d, peak = 0.11) {
+  const o = ctx.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(f, t);
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(f * 1.5, t);
+  lp.frequency.linearRampToValueAtTime(f * 6, t + 0.04);
+  lp.frequency.exponentialRampToValueAtTime(f * 2.5, t + d);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.02);
+  g.gain.setValueAtTime(peak, t + d * 0.75);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.14);
+  o.connect(lp).connect(g).connect(out);
+  o.start(t);
+  o.stop(t + d + 0.2);
+}
+// ファンファーレ「パッパッパッ、パーン！」
+function fanfare(ctx, t, out) {
+  const notes = [[523.25, 0, 0.1], [659.25, 0.12, 0.1], [783.99, 0.24, 0.1], [1046.5, 0.36, 0.8]];
+  for (const [f, at, d] of notes) for (const det of [1, 1.007]) brass(ctx, out, f * det, t + at, d);
+  // 最後の音は和音で厚く
+  for (const f of [659.25, 783.99]) brass(ctx, out, f, t + 0.36, 0.8, 0.07);
+  return t + 1.3;
+}
+// 歓声「ワーッ！」：ざわざわした息の音を何層か重ねる
+function cheer(ctx, t, out) {
+  for (let i = 0; i < 5; i++) {
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf(ctx);
+    src.loop = true;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(500 + i * 320, t);
+    bp.Q.value = 1.4;
+    const g = ctx.createGain();
+    const t0 = t + i * 0.04;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.18);
+    g.gain.setValueAtTime(0.14, t0 + 0.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.5);
+    src.connect(bp).connect(g).connect(out);
+    src.start(t0, Math.random() * 0.5);
+    src.stop(t0 + 1.6);
+  }
+  return t + 1.6;
+}
+export const SOUNDS = { clink, fizz, gulp, puhaa, pop, drumroll, fanfare, cheer };
+
+// 鳴らす音の予定表 [名前, 秒]（プレビュー動画も同じ表を使う）
+export function soundPlan(kind, mult = 1) {
+  const big = mult > 1;
+  const mega = isMega(mult);
+  const base = kind === 'solo'
+    ? [['pop', 0], ['gulp', 0.74], ['gulp', 1.0], ['puhaa', 1.26]].concat(big && !mega ? [['clink', 1.3]] : [])
+    : [['pop', 0.02], ['clink', 0.37], ['fizz', 0.45]].concat(big && !mega ? [['clink', 0.55]] : []);
+  if (!mega) return base;
+  const z = MEGA_Z[kind] / 1000;
+  const hit = z + MEGA_COUNT / 1000;
+  return base.concat([['drumroll', z], ['clink', hit], ['fanfare', hit], ['cheer', hit + 0.05], ['clink', hit + 0.16]]);
+}
 
 function playSounds(list) {
   if (!fxState.sound) return false;
@@ -225,6 +311,32 @@ function highballSvg({ water = false } = {}) {
   </svg>`;
 }
 
+// 特大演出：上から降る紙吹雪
+function rain(n, { water = false } = {}) {
+  const cols = water ? [BLUE, BLUE_L, PAPER] : [PINK, BLUE, PAPER, PINK, BLUE_L];
+  let h = '';
+  for (let i = 0; i < n; i++) {
+    const shape = ['conf', 'conf', 'dot', 'drop'][i % 4];
+    h += `<i class="fx-p ${shape}" style="--x:${(Math.random() * 100).toFixed(1)}%;--r:${(Math.random() * 900 - 450).toFixed(0)}deg;--s:${(0.7 + Math.random() * 0.8).toFixed(2)};--c:${cols[i % cols.length]};--dl:${(Math.random() * 700).toFixed(0)}ms;--sw:${(Math.random() * 60 - 30).toFixed(0)}px"></i>`;
+  }
+  return h;
+}
+// 特大演出：下からせり上がるビール（お水なら水）の波
+function waveSvg({ water = false } = {}) {
+  const liq = water ? BLUE_L : PINK;
+  const dots = BLUE;
+  let crest = 'M0 46';
+  for (let x = 0; x < 440; x += 40) crest += ' q10 -26 20 -6 q10 -20 20 6';
+  let under = 'L440 74';
+  for (let x = 440; x > 0; x -= 40) under += ' q-10 14 -20 2 q-10 12 -20 -2';
+  return `<svg viewBox="0 0 440 300" preserveAspectRatio="none" aria-hidden="true">
+    <defs><pattern id="wv-d" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.8" fill="${dots}" opacity=".35"/></pattern></defs>
+    <rect x="0" y="60" width="440" height="240" fill="${liq}"/>
+    <rect x="0" y="60" width="440" height="240" fill="url(#wv-d)"/>
+    <path d="${crest} ${under} Z" fill="${PAPER}" stroke="${INK}" stroke-width="4" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+  </svg>${Array.from({ length: 14 }, (_, i) => `<i class="fx-wb" style="--x:${(4 + Math.random() * 92).toFixed(1)}%;--i:${i};--sz:${(8 + Math.random() * 14).toFixed(0)}px"></i>`).join('')}`;
+}
+
 // 飛び散るしずく・紙吹雪
 function particles(n, { spread = 1, water = false } = {}) {
   const cols = water ? [BLUE, BLUE_L, PAPER, PINK] : [PINK, BLUE, PAPER, PINK];
@@ -243,6 +355,7 @@ function particles(n, { spread = 1, water = false } = {}) {
 let layer = null;
 let current = null;
 let shakeTimer = null;
+let timers = [];
 function ensureLayer() {
   if (layer && document.body.contains(layer)) return layer;
   layer = document.createElement('div');
@@ -270,42 +383,56 @@ export function playDrink({ kind, water = false, mult = 1, hold = false } = {}) 
   const root = ensureLayer();
   if (current) current.remove();
   const big = mult > 1;
+  const mega = isMega(mult);
   const n = 26 + Math.min(mult - 1, 6) * 10;
   const el = document.createElement('div');
-  el.className = `fx fx-${kind}${water ? ' water' : ''}${big ? ' big' : ''}`;
-  const badge = big ? `<b class="fx-mult">×${mult}</b>` : '';
+  el.className = `fx fx-${kind}${water ? ' water' : ''}${big ? ' big' : ''}${mega ? ' mega' : ''}`;
+  const total = totalMs(kind, mult);
+  if (mega) el.style.cssText = `--mz:${MEGA_Z[kind]}ms;--total:${total}ms;--to:${mult}`;
+  // 特大のときは小さいバッジの代わりに、上で大きくカウントアップする
+  const badge = big && !mega ? `<b class="fx-mult">×${mult}</b>` : '';
+  const back = mega ? `<div class="fx-strobe"></div><div class="fx-wave">${waveSvg({ water })}</div>` : '';
+  const front = mega ? `<div class="fx-rain">${rain(36 + Math.min(mult, 20) * 3, { water })}</div>
+      <div class="fx-count-wrap"><i class="fx-star"></i><b class="fx-count" data-to="${mult}"></b><span class="fx-word fx-mega-word">${megaWord(mult)}</span></div>` : '';
   if (kind === 'solo') {
-    el.innerHTML = `<div class="fx-veil"></div><div class="fx-rays"></div>
+    el.innerHTML = `<div class="fx-veil"></div><div class="fx-rays"></div>${back}
       <div class="fx-stage">
         <div class="fx-g one">${water ? highballSvg({ water }) : mugSvg()}</div>
         <span class="fx-word w1">ゴクッ</span><span class="fx-word w2">ゴクッ</span>
         <div class="fx-burst">${particles(n, { water })}</div>
         <span class="fx-word big-word">${water ? 'ふぅ〜ッ！' : 'プハーッ！'}</span>${badge}
-      </div>`;
+      </div>${front}`;
   } else {
-    el.innerHTML = `<div class="fx-veil"></div><div class="fx-rays"></div>
+    el.innerHTML = `<div class="fx-veil"></div><div class="fx-rays"></div>${back}
       <div class="fx-stage">
         <div class="fx-g left">${water ? highballSvg({ water }) : mugSvg({ flip: true })}</div>
         <div class="fx-g right">${highballSvg({ water })}</div>
         <div class="fx-flash"></div>
         <div class="fx-burst">${particles(n, { spread: 1.15, water })}</div>
         <span class="fx-word big-word">${water ? 'チェイサー！' : 'カンパーイ！'}</span>${badge}
-      </div>`;
+      </div>${front}`;
   }
   root.appendChild(el);
   current = el;
-  let sound;
+  const sound = playSounds(soundPlan(kind, mult));
+  const later = (ms, fn) => { if (!hold) timers.push(setTimeout(fn, ms)); };
+  timers.forEach(clearTimeout);
+  timers = [];
   if (kind === 'solo') {
-    sound = playSounds([['pop', 0], ['gulp', 0.74], ['gulp', 1.0], ['puhaa', 1.26]].concat(big ? [['clink', 1.3]] : []));
-    setTimeout(() => vibrate([25]), 740);
-    setTimeout(() => vibrate([25]), 1000);
-    setTimeout(() => { vibrate(big ? [80, 40, 140] : [90]); shake(380, big); }, 1260);
+    later(740, () => vibrate([25]));
+    later(1000, () => vibrate([25]));
+    later(1260, () => { vibrate(big ? [80, 40, 140] : [90]); shake(380, big); });
   } else {
-    sound = playSounds([['pop', 0.02], ['clink', 0.37], ['fizz', 0.45]].concat(big ? [['clink', 0.55]] : []));
-    setTimeout(() => { vibrate(big ? [60, 30, 160] : [110]); shake(420, true); }, 370);
+    later(370, () => { vibrate(big ? [60, 30, 160] : [110]); shake(420, true); });
+  }
+  if (mega) {
+    // ドーン！：長めの振動と、2回ゆれる
+    const hit = MEGA_Z[kind] + MEGA_COUNT;
+    later(hit, () => { vibrate([150, 60, 150, 60, 320]); shake(420, true); });
+    later(hit + 480, () => shake(420, true));
   }
   fxState.count++;
-  fxState.last = { kind, water, mult, sound, at: Date.now() };
-  if (!hold) setTimeout(() => { el.remove(); if (current === el) current = null; }, DUR[kind] + 80);
+  fxState.last = { kind, water, mult, mega, sound, at: Date.now(), ms: total };
+  if (!hold) setTimeout(() => { el.remove(); if (current === el) current = null; }, total + 80);
   return fxState.last;
 }

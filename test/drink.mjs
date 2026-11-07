@@ -1,4 +1,4 @@
-// 飲む演出：飲む確定時（当てはまり系は「いた！」、勝負・条件つきは「飲んだ！」）に、ひとりならグラスひとつ・みんなならグラスふたつ。node test/drink.mjs [URL] [--video]
+// 飲む演出（貯金 ×5 以上は特大演出）：飲む確定時（当てはまり系は「いた！」、勝負・条件つきは「飲んだ！」）に、ひとりならグラスひとつ・みんなならグラスふたつ。node test/drink.mjs [URL] [--video]
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
@@ -83,6 +83,30 @@ s = await st();
 r.big = { last: s.fx.last, badge: (await page.locator('#fx-layer .fx.big .fx-mult').textContent().catch(() => null)) };
 await sleep(800);
 
+// 4b) 貯金6つで当てはまり →「いた！」で ×7 の特大演出（カウントアップ → ドーン！ → 波・紙吹雪）
+await inject(['K1-04'], { pot: 6 });
+await page.click('[data-act="kdraw"]');
+await sleep(600);
+await page.click('[data-act="knext"]');
+await sleep(1500); await shot('X1-mega-count');
+r.megaCounting = await page.evaluate(() => Number(getComputedStyle(document.querySelector('#fx-layer .fx.mega .fx-count')).getPropertyValue('--n')));
+await sleep(1050); await shot('X2-mega-slam');
+s = await st();
+r.mega = await page.evaluate(() => ({
+  el: document.querySelectorAll('#fx-layer .fx.mega').length,
+  n: Number(getComputedStyle(document.querySelector('#fx-layer .fx.mega .fx-count')).getPropertyValue('--n')),
+  afterN: Number(getComputedStyle(document.querySelector('#fx-layer .fx.mega .fx-count'), '::after').getPropertyValue('--n')),
+  word: document.querySelector('#fx-layer .fx-mega-word')?.textContent,
+  rain: document.querySelectorAll('#fx-layer .fx-rain .fx-p').length,
+  wave: document.querySelectorAll('#fx-layer .fx-wave svg').length,
+  smallBadge: document.querySelectorAll('#fx-layer .fx-mult').length,
+}));
+r.mega.last = s.fx.last;
+await sleep(700);
+r.mega.stillAt3_2s = await page.locator('#fx-layer .fx.mega').count();
+await sleep(1000);
+r.mega.goneAt4_2s = await page.locator('#fx-layer .fx').count();
+
 // 5) チェイサー（お水）→ お水のグラスふたつ
 await page.click('[data-act="kdraw"]');
 await sleep(700); await shot('W1-water');
@@ -141,7 +165,7 @@ await sleep(1800);
 // 7) 音そのもの：オフラインで鳴らして、無音でないか
 r.audio = await page.evaluate(async () => {
   const out = {};
-  for (const name of ['pop', 'clink', 'fizz', 'gulp', 'puhaa']) {
+  for (const name of ['pop', 'clink', 'fizz', 'gulp', 'puhaa', 'drumroll', 'fanfare', 'cheer']) {
     const oc = new OfflineAudioContext(1, 44100 * 1.2, 44100);
     window.__bb.FX.SOUNDS[name](oc, 0.01, oc.destination);
     const buf = await oc.startRendering();
@@ -158,7 +182,9 @@ const ok = r.hitRevealAdded === 0 && r.noneAdded === 0 && r.contestRevealAdded =
   && r.contestButtons.some((t) => t.includes('飲んだ！')) && r.contestButtons.some((t) => t.includes('セーフ')) && r.soloEl === 1 && r.solo.added === 1 && r.solo.last.kind === 'solo' && r.solo.last.sound === true && r.soloGone === 0
   && r.noDrinkAdded === 0
   && r.multiEl === 1 && r.multi.added === 1 && r.multi.last.kind === 'multi'
-  && r.big.last.mult === 4 && r.big.badge === '×4'
+  && r.big.last.mult === 4 && r.big.badge === '×4' && r.big.last.mega === false
+  && r.mega.el === 1 && r.mega.last.mega === true && r.mega.last.mult === 7 && r.mega.n === 7 && r.mega.afterN === 7 && r.megaCounting > 1 && r.megaCounting < 7
+  && r.mega.word === '貯金ドーン！' && r.mega.rain > 30 && r.mega.wave === 1 && r.mega.smallBadge === 0 && r.mega.stillAt3_2s === 1 && r.mega.goneAt4_2s === 0
   && r.water.last.water === true && r.water.el === 1
   && r.menuLabelOn === '効果音：オン' && r.menuLabelOff === '効果音：オフ' && r.muted.last.sound === false && r.muted.stored === '0'
   && Object.values(r.audio).every((a) => a.peak > 0.05 && a.peak <= 1.0);

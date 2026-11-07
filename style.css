@@ -591,6 +591,48 @@ input:focus { outline: none; box-shadow: 3px 3px 0 var(--pink); }
   100% { transform: translate(calc(-50% + var(--x) * 1.15), calc(-50% + var(--y) + 170px)) scale(var(--s)) rotate(var(--r)); opacity: 0; }
 }
 .fx.big .fx-rays { animation-duration: calc(var(--dur) + 200ms); }
+/* ---------- 特大演出（貯金 ×5 以上）：カウントアップ → ドーン！ → ビールの波・紙吹雪の雨 ---------- */
+@property --n { syntax: '<integer>'; inherits: true; initial-value: 1; }
+.fx.mega .fx-veil, .fx.mega .fx-rays { animation-duration: var(--total); }
+.fx-count-wrap {
+  position: absolute; left: 0; right: 0; top: 12%; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  opacity: 0; animation: fx-mega-in 0.25s ease-out var(--mz) both, fx-slam 0.6s cubic-bezier(.2, 1.5, .4, 1) calc(var(--mz) + 900ms) forwards, fx-mega-out 0.35s ease-in calc(var(--total) - 380ms) forwards;
+}
+@keyframes fx-mega-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes fx-slam { 0% { opacity: 1; transform: scale(2.3) rotate(-10deg); } 35% { transform: scale(0.88) rotate(-4deg); } 55% { transform: scale(1.08) rotate(-5deg); } 100% { opacity: 1; transform: scale(1) rotate(-5deg); } }
+@keyframes fx-mega-out { to { opacity: 0; transform: scale(1.1) rotate(-5deg) translateY(-20px); } }
+.fx-count {
+  position: relative; font-family: var(--display); font-weight: 400; font-size: clamp(84px, 30vw, 150px); line-height: 1;
+  color: var(--paper-2); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; text-shadow: 6px 6px 0 var(--pink), 11px 11px 0 var(--blue);
+  animation: fx-count 900ms cubic-bezier(.3, .55, .45, 1) var(--mz) both;
+}
+/* 数字は ::after に出す。counter-reset は本体に置く（::after 側だと動いている --n を読めない） */
+.fx-count { counter-reset: n var(--n); }
+.fx-count::after { content: '×' counter(n); }
+@keyframes fx-count { from { --n: 1; } to { --n: var(--to); } }
+.fx-star {
+  position: absolute; left: 50%; top: clamp(42px, 15vw, 75px); width: clamp(210px, 62vw, 310px); aspect-ratio: 1; margin-left: calc(clamp(210px, 62vw, 310px) / -2); translate: 0 -50%;
+  background: var(--pink); border-radius: 0;
+  clip-path: polygon(50% 0%, 61% 15%, 79% 9%, 80% 27%, 97% 32%, 88% 48%, 100% 62%, 83% 70%, 84% 89%, 66% 86%, 54% 100%, 43% 87%, 25% 93%, 22% 75%, 4% 69%, 13% 53%, 1% 38%, 18% 31%, 18% 12%, 36% 14%);
+  filter: drop-shadow(5px 5px 0 var(--ink)); opacity: 0;
+  animation: fx-star 2s linear calc(var(--mz) + 900ms) both;
+}
+.fx.water .fx-star { background: var(--blue-l); }
+@keyframes fx-star { 0% { opacity: 0; transform: scale(0.3) rotate(0); } 10% { opacity: 1; transform: scale(1.1) rotate(8deg); } 100% { opacity: 1; transform: scale(1) rotate(50deg); } }
+.fx-mega-word { position: relative; font-size: clamp(34px, 11vw, 54px); opacity: 0; animation: fx-pop 0.5s cubic-bezier(.2, 1.6, .4, 1) calc(var(--mz) + 1000ms) both; }
+@keyframes fx-pop { 0% { opacity: 0; transform: scale(0) rotate(-12deg); } 60% { opacity: 1; transform: scale(1.2) rotate(4deg); } 100% { opacity: 1; transform: scale(1) rotate(-3deg); } }
+.fx-strobe { position: absolute; inset: 0; background: var(--pink); opacity: 0; animation: fx-strobe 0.56s steps(1, end) calc(var(--mz) + 880ms) both; }
+@keyframes fx-strobe { 0% { opacity: 0.5; background: #fff; } 18% { opacity: 0.32; background: var(--pink); } 40% { opacity: 0; } 58% { opacity: 0.28; background: var(--blue); } 80%, 100% { opacity: 0; } }
+.fx-wave { position: absolute; left: -6%; right: -6%; bottom: 0; height: 50%; transform: translateY(105%); animation: fx-wave calc(var(--total) - var(--mz) - 850ms) cubic-bezier(.3, .8, .3, 1) calc(var(--mz) + 850ms) both; }
+.fx-wave svg { position: absolute; inset: 0; width: 100%; height: 100%; animation: fx-sway 0.9s ease-in-out infinite alternate; }
+@keyframes fx-wave { 0% { transform: translateY(105%); } 28% { transform: translateY(6%); } 40% { transform: translateY(14%); } 52% { transform: translateY(9%); } 78% { transform: translateY(12%); } 100% { transform: translateY(105%); } }
+@keyframes fx-sway { from { transform: translateX(-2.5%) skewX(-2deg); } to { transform: translateX(2.5%) skewX(2deg); } }
+.fx-wb { position: absolute; left: var(--x); bottom: 0; width: var(--sz); height: var(--sz); border-radius: 50%; border: 2.5px solid var(--paper-2); animation: fx-wb 1.1s ease-in calc(var(--mz) + 1100ms + var(--i) * 70ms) infinite; opacity: 0; }
+@keyframes fx-wb { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-36vh); opacity: 0; } }
+.fx-rain { position: absolute; inset: 0; }
+.fx-rain .fx-p { left: var(--x); top: -24px; opacity: 1; animation: fx-rain 1.5s cubic-bezier(.4, .1, .7, 1) calc(var(--mz) + 900ms + var(--dl)) both; }
+@keyframes fx-rain { 0% { transform: translate(0, 0) rotate(0) scale(var(--s)); opacity: 1; } 100% { transform: translate(var(--sw), 112vh) rotate(var(--r)) scale(var(--s)); opacity: 1; } }
+
 
 /* 画面ゆれ（main.game は全画面ぴったりなので、動かしても中の固定表示はずれない） */
 body.fx-shake .game { animation: fx-shake 0.38s linear; }

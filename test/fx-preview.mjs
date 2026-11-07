@@ -21,18 +21,17 @@ await page.click('[data-act="add-local"]');
 await page.click('[data-act="start"]');
 await page.waitForTimeout(600);
 
-// 場面：[カードid, 演出, 長さ(s), 貯金]
-const scenes = [
+// 場面：[カードid, 演出, 長さ(s), 貯金]。--mega で特大演出（貯金 ×5 以上）だけ
+const MEGA = process.argv.includes('--mega');
+const scenes = MEGA ? [
+  ['K1-02', { kind: 'solo', mult: 7 }, 4.0, 6],
+  ['K1-33', { kind: 'multi', mult: 12 }, 3.1, 11],
+] : [
   ['K1-01', { kind: 'solo', mult: 1 }, 2.2, 0],
   ['K1-33', { kind: 'multi', mult: 1 }, 1.9, 0],
   ['K1-02', { kind: 'solo', mult: 4 }, 2.2, 3],
   ['KW', { kind: 'multi', water: true, mult: 1 }, 1.9, 0],
 ];
-const SCHED = {
-  solo: [['pop', 0], ['gulp', 0.74], ['gulp', 1.0], ['puhaa', 1.26]],
-  soloBig: [['pop', 0], ['gulp', 0.74], ['gulp', 1.0], ['puhaa', 1.26], ['clink', 1.3]],
-  multi: [['pop', 0.02], ['clink', 0.37], ['fizz', 0.45]],
-};
 let frame = 0;
 const audioPlan = [];
 let t0 = 0;
@@ -61,7 +60,7 @@ for (const [card, fx, len, pot] of scenes) {
     }, ms);
     await page.screenshot({ path: `${OUT}frames/${String(frame++).padStart(4, '0')}.png` });
   }
-  const sched = fx.kind === 'solo' ? (fx.mult > 1 ? SCHED.soloBig : SCHED.solo) : SCHED.multi;
+  const sched = await page.evaluate((fx) => window.__bb.FX.soundPlan(fx.kind, fx.mult), fx);
   for (const [name, at] of sched) audioPlan.push([name, t0 + at]);
   t0 += n / FPS;
   await page.evaluate(() => document.getElementById('fx-layer')?.replaceChildren());
@@ -93,5 +92,5 @@ fs.writeFileSync(OUT + 'sound.wav', Buffer.from(wavB64, 'base64'));
 await browser.close();
 
 execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', `${OUT}frames/%04d.png`, '-i', `${OUT}sound.wav`,
-  '-vf', 'scale=780:-2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-shortest', `${OUT}preview.mp4`]);
-console.log('frames', frame, 'sec', total.toFixed(2), '→', OUT + 'preview.mp4');
+  '-vf', 'scale=780:-2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-shortest', `${OUT}${MEGA ? 'mega' : 'preview'}.mp4`]);
+console.log('frames', frame, 'sec', total.toFixed(2), '→', OUT + (MEGA ? 'mega' : 'preview') + '.mp4');
