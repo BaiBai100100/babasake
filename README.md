@@ -19,6 +19,7 @@
 | `kioku.js` / `kioku-data.js` | 記憶のルールとお題108枚＋泥酔カード12枚 |
 | `cpus.js` | CPUキャラ6人 |
 | `img/` | 生成画像（webp） |
+| `games.js` | 飲みゲー（山手線・マジカルバナナ・どすこい…）のお題。引いた瞬間にアプリが決める |
 | `drink.js` | 飲む演出の判定（ひとり／みんな／お水。純粋関数） |
 | `fx.js` | 飲む演出の画面・効果音（Web Audio で合成）・振動 |
 | `net.js` | MQTT 通信 |
@@ -27,7 +28,7 @@
 ## テスト
 ```
 npm i
-node --test test/logic.test.mjs          # ルール（ランダム1000ゲーム含む）
+node --test test/*.test.mjs              # ルール（ランダム1000ゲーム含む）・飲む判定・飲みゲーのお題
 python3 -m http.server 8765 &            # 別ターミナル
 node test/e2e.mjs http://localhost:8765/   # 複数台で通し（ババ酒3人＋CPU、記憶2人＋泥酔）
 node test/smoke.mjs http://localhost:8765/ # 1台モードで全画面を撮影

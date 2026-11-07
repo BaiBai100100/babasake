@@ -162,6 +162,16 @@ function avatar(p, size = 'm') {
   return `<span class="av ${size} txt ${tone}" aria-hidden="true">${ch}</span>`;
 }
 
+// 飲みゲーのお題（アプリが決めた言葉）を目立たせる。html はエスケープ済みの文面
+// どすこいの頭文字のような1〜2文字のお題は、ほかの言葉の中の同じ文字まで光らないよう「」『』の中だけ
+function markTopic(html, topic) {
+  if (!topic) return html;
+  const t = esc(topic);
+  const wrap = `<span class="topic">${t}</span>`;
+  if (t.length > 2) return html.split(t).join(wrap);
+  return html.replace(/([「『])([^「」『』]{1,2})([」』])/g, (m, a, x, b) => (x === t ? a + wrap + b : m));
+}
+
 // ---------- トランプ ----------
 function cardFace(id, { size = 'm', extra = '', attrs = '' } = {}) {
   if (id === 'JK') return `<div class="card face joker ${size} ${extra}" ${attrs}><img src="img/joker.webp" alt="JOKER"></div>`;
@@ -183,7 +193,7 @@ function bigCard(id, g, { extra = '', attrs = '', double = false, flip = null } 
   return `<div class="bigcard ${info.color} ${extra} ${fl.cls}" style="${fl.style}" ${attrs}>
     <div class="bc-art"><img src="img/s-${s}.webp" alt=""></div>
     <div class="bc-top"><span class="bc-rk">${L.RANK_LABEL[L.rankOf(id)]}</span><span class="bc-st">${info.mark}</span><span class="bc-role">${info.role}</span></div>
-    <p class="bc-text">${esc(def.t)}</p>
+    <p class="bc-text">${markTopic(esc(def.t), def.topic)}</p>
     ${double ? `<div class="x2">効果2倍：飲むなら${g?.hard ? '四口' : '二口'}、やるなら2回</div>` : ''}
   </div>`;
 }
@@ -870,7 +880,7 @@ function kCard(s) {
   const c = K.currentCard(s);
   const genre = GENRES[c.g];
   const pen = s.settings?.penalty || (g.hard ? '二口飲む' : '一口飲む');
-  const text = esc(c.t).replace(/私/g, '<span class="me-word">私</span>');
+  const text = markTopic(esc(c.t).replace(/私/g, '<span class="me-word">私</span>'), c.topic);
   let foot = '';
   if (K.isToastCard(c) && g.pot) foot = `乾杯して${everyone(g)} → ${esc(K.penaltyText(pen, g.pot + 1))}<span class="pot-note">貯金${g.pot}つぶん込み</span>`;
   else if (genre.foot === 'hit') foot = `当てはまった人 → ${esc(K.penaltyText(pen, (g.pot || 0) + 1))}${g.pot ? `<span class="pot-note">貯金${g.pot}つぶん込み</span>` : ''}`;
@@ -1005,7 +1015,7 @@ const RULES_BABA = `<h2>笑うババには酒来たる</h2>
 <table class="suits">
   <tr><td class="red">♦</td><td>だれがやる？</td><td>指名・全員を巻き込む</td></tr>
   <tr><td>♠</td><td>勝負とルール</td><td>じゃんけん・対決・縛り</td></tr>
-  <tr><td class="red">♥</td><td>乾杯タイム</td><td>とにかく飲む・乾杯</td></tr>
+  <tr><td class="red">♥</td><td>みんなでゲーム</td><td>山手線・マジカルバナナ・どすこい（お題はアプリが決める）</td></tr>
   <tr><td>♣</td><td>展開が動く</td><td>スキップ・リバース・交換・2倍</td></tr>
 </table>
 <p class="hint">ゆさぶり：自分の手札をタップすると、1枚だけ浮かせられます。CPUもときどき浮かせてきます。</p>`;
@@ -1017,8 +1027,9 @@ const RULES_KIOKU = `<h2>記憶無くしちゃダメですか</h2>
 </ol>
 <table class="suits">
   <tr><td>1</td><td>第1弾</td><td>当てはまった人・直近◯◯した人・全員参加・遅刻ドジ</td></tr>
-  <tr><td>2</td><td>第2弾</td><td>王様・指名・ミニゲーム・暴露</td></tr>
+  <tr><td>2</td><td>第2弾</td><td>王様・指名・ミニゲーム・飲みゲー・暴露</td></tr>
 </table>
+<p class="hint"><b>飲みゲーのお題はアプリが決める</b>：山手線ゲーム・マジカルバナナ・どすこいゲームなどは、カードを引いた瞬間にお題（頭文字・最初の言葉）が決まって、全員のスマホに同じものが出ます。</p>
 <h3>だれも当てはまらないとき</h3>
 <p class="hint"><b>いなけりゃ貯金、いたら総取り、乾杯なら全員。</b>「だれもいない」を押すとペナルティが1つ貯金されます。貯金に上限はなく、だれも当てはまらないかぎりどんどん溜まります。次に当てはまった人が出たら、貯金ぶんもまとめて受けます（貯金1つで2倍、2つで3倍、5つで6倍…）。<br>
 貯金があるときに「全員で乾杯」のカードが出たら、全員がひとりずつ、乾杯の一杯に貯金ぶんを足して受けます（当てはまった人と同じで、貯金2つなら全員が3倍＝三口ずつ）。分け合いはなし。<br>
@@ -1093,12 +1104,12 @@ function render() {
 }
 
 // 記憶のカード画面を、スクロールなしで1画面に収める。
-// 足りないぶんだけ絵を縮め、それでもだめなら段階的に詰める（fit1 → 絵を消す fit2 → 文字を小さく fit3）
+// 足りないぶんだけ絵を縮め、それでもだめなら段階的に詰める（fit1 詰める → fit2 文字を少し小さく → fit3 絵を消す → fit4 さらに小さく）
 const ART_MIN = 72;
 function fitStage() {
   const st = app.querySelector('.k-stage');
   if (!st) return;
-  st.classList.remove('fit1', 'fit2', 'fit3');
+  st.classList.remove('fit1', 'fit2', 'fit3', 'fit4');
   const art = st.querySelector('.k-art');
   if (art) { art.classList.remove('squeezed'); art.style.height = ''; }
   // 中身の高さはレイアウト上の値（offsetHeight）で足し算する。
@@ -1125,7 +1136,7 @@ function fitStage() {
     art.style.height = `${h}px`;
   };
   squeeze();
-  for (const lv of ['fit1', 'fit2', 'fit3']) {
+  for (const lv of ['fit1', 'fit2', 'fit3', 'fit4']) {
     if (over() <= 0) return;
     st.classList.add(lv);
     squeeze();

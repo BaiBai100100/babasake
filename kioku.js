@@ -1,6 +1,7 @@
 // 記憶無くしちゃダメですか：山札から1枚引いて、書いてあることに従う
 import { KIOKU_CARDS, KIOKU_BY_ID, HARD_CARDS, WATER_CARD, WATER_EVERY, GENRES } from './kioku-data.js';
 import { shuffle, nameOf } from './logic.js';
+import { makeTopic, fillTopic } from './games.js';
 
 export const MIN_PLAYERS = 2;
 // だれも当てはまらないときの貯金（キャリーオーバー）は上限なし。次に当てはまった人が全部受ける
@@ -42,8 +43,11 @@ export function cardView(id, g) {
   if (!c) return null;
   let t = (g?.duo && c.t2) || c.t;
   if (g?.hard) t = t.replace(/一口/g, '二口');
+  // 飲みゲーのお題は、引いた瞬間に決めて g.topic に入れてある（全員の画面で同じ）
+  const topic = c.game && g?.card === id ? g.topic || null : null;
+  if (c.game) t = fillTopic(t, topic);
   const rule = c.rule ? ((g?.duo && c.rule2) || c.rule) : null;
-  return { ...c, t, rule };
+  return { ...c, t, rule, topic: topic?.text || null };
 }
 
 export function actorOf(s) {
@@ -84,7 +88,7 @@ export const remaining = (s) => s.game.deck.length - s.game.pos;
 export const currentCard = (s) => (s.game?.card ? cardView(s.game.card, s.game) : null);
 export const candidates = (s, pid) => s.players.map((p) => p.id).filter((x) => x !== pid);
 
-export function draw(s0, pid) {
+export function draw(s0, pid, rng = Math.random) {
   const s = clone(s0);
   const g = s.game;
   if (s.phase !== 'play' || g.step !== 'draw') fail('いまは引く場面ではありません');
@@ -104,6 +108,8 @@ export function draw(s0, pid) {
     g.card = g.deck[g.pos++];
   }
   g.n++;
+  // 飲みゲーのカードは、ここでお題を決める
+  g.topic = KIOKU_BY_ID[g.card]?.game ? makeTopic(KIOKU_BY_ID[g.card].game, rng) : null;
   g.step = 'card';
   g.notice = null;
   g.picks = [];
@@ -240,7 +246,7 @@ export function autoAction(s, rng = Math.random) {
 }
 
 export function applyAction(s, a, rng = Math.random) {
-  if (a.type === 'draw') return draw(s, a.pid);
+  if (a.type === 'draw') return draw(s, a.pid, rng);
   if (a.type === 'commit') return commit(s, a.pid, a.input);
   if (a.type === 'next') return next(s, a.pid, { drank: !!a.drank });
   if (a.type === 'none') return none(s, a.pid);

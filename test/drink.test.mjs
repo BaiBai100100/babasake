@@ -91,13 +91,13 @@ test('恋愛のお題はなし。ババ酒の♥は全部「飲む」カード',
   for (let i = 1; i <= 13; i++) {
     for (const duo of [false, true]) assert.ok(babaDrink('H' + i, L.odaiOf('H' + i, { duo })), `H${i} は飲むカード`);
   }
-  // ♥の中でも、結果しだいのものは「飲んだ！」を押してから
-  for (const id of ['H8', 'H9', 'H10', 'H13']) assert.equal(babaDrink(id, L.odaiOf(id, {})).after, true, id);
-  for (const id of ['H1', 'H3', 'H5', 'H6', 'H11', 'H12']) assert.equal(babaDrink(id, L.odaiOf(id, {})).kind, 'multi', id);
-  // 暴露は話すお題：「飲みすぎた日の話」でも演出は出さない
-  assert.equal(kd('K2-47'), null);
-  assert.equal(kd('K2-22').kind, 'solo'); // 「乾杯」の言い方勝負は負けた1人が飲む
-  assert.equal(kd('K2-02').kind, 'multi'); // 2人に一口ずつ
+  // ♥は飲みゲー：負けた人が飲むので、ぜんぶ「飲んだ！」を押してから
+  for (let i = 1; i <= 13; i++) for (const duo of [false, true]) assert.equal(babaDrink('H' + i, L.odaiOf('H' + i, { duo })).after, true, `H${i}`);
+  // 暴露は話すお題なので演出は出さない
+  assert.equal(kd('K2-48'), null);
+  assert.equal(kd('K2-47').after, true); // モッツァレラチーズゲーム
+  assert.equal(kd('K2-22').kind, 'solo'); // あたまおしり：負けた1人が飲む
+  assert.equal(kd('K2-02').after, true); // 山手線：詰まった人が飲む
 });
 
 test('全カードで例外なく判定できる', () => {

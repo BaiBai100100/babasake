@@ -3,6 +3,16 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { KIOKU_BY_ID } from '../kioku-data.js';
+import { GAMES, makeTopic } from '../games.js';
+
+// 飲みゲーのお題は、いちばん長くなるものを入れて測る
+const LONGEST = {};
+for (const game of Object.keys(GAMES)) {
+  for (let i = 0; i < 3000; i++) {
+    const tp = makeTopic(game);
+    if (!LONGEST[game] || tp.text.length > LONGEST[game].text.length) LONGEST[game] = tp;
+  }
+}
 
 const BASE = process.argv[2] || 'http://localhost:8766/';
 const OUT = new URL('../shots/fit/', import.meta.url).pathname;
@@ -34,13 +44,14 @@ async function setup(players) {
 }
 
 async function measure(page, id) {
-  await page.evaluate((id) => window.__bb.commit((s) => {
+  const topic = LONGEST[KIOKU_BY_ID[id].game] || null;
+  await page.evaluate(([id, topic]) => window.__bb.commit((s) => {
     const t = structuredClone(s);
     const g = t.game;
     const c = window.__bb.K.cardView(id, g);
-    Object.assign(g, { step: 'card', card: id, n: g.n + 1, picks: [], text: null, timer: null, committed: !c.need, pot: 3 });
+    Object.assign(g, { step: 'card', card: id, n: g.n + 1, picks: [], text: null, timer: null, committed: !c.need, pot: 3, topic });
     return t;
-  }), id);
+  }), [id, topic]);
   await page.waitForTimeout(30);
   return page.evaluate(() => {
     const st = document.querySelector('.k-stage');
@@ -83,17 +94,19 @@ for (const [label, players] of [['2人', ['めふ']], ['3人', ['めふ', 'よ�
     }
     summary.push(`${label} ${w}x${h}: はみ出し ${bad}/${IDS.length}枚, 最大 ${Math.max(0, worst.over)}px (${worst.id}), 絵の最小 ${minArt}px, 文字の最小 ${minFont}px`);
     // 指摘されたカード（30秒以内に誕生日）と、いちばん長いカードを撮る
-    for (const id of ['K2-33', 'K2-16']) {
+    for (const id of ['K2-33', 'K2-16', 'K2-50']) {
       await measure(page, id);
       await sleep(900); // めくりアニメと書体の読み込みが終わってから撮る
       await page.screenshot({ path: `${OUT}${label}-${w}x${h}-${id}.png` });
-      // 絵を縮めたのに下が大きく空いている（縮めすぎ）はだめ
+      // 絵を縮めたのに下が大きく空いている（縮めすぎ）、絵を消したのに絵が入るほど空いている、はだめ
       const slack = await page.evaluate(() => {
         const st = document.querySelector('.k-stage');
         const art = [...st.querySelectorAll('.k-art.squeezed')].find((a) => a.offsetHeight > 0);
         const last = [...st.children].filter((e) => e.offsetParent).pop();
         const pad = parseFloat(getComputedStyle(st).paddingBottom);
-        return art ? Math.round(st.getBoundingClientRect().bottom - pad - last.getBoundingClientRect().bottom) : 0;
+        const gap = Math.round(st.getBoundingClientRect().bottom - pad - last.getBoundingClientRect().bottom);
+        if (art) return gap;
+        return st.classList.contains('fit3') ? Math.max(0, gap - 90) : 0;
       });
       if (slack > 12) fails.push({ label, size: `${w}x${h}`, id, slack });
       summary.push(`  ${id}: 絵を縮めたあとの余り ${slack}px`);

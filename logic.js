@@ -1,5 +1,6 @@
 // ゲームの状態遷移（純粋関数）。ブラウザでも Node でも動く。
 import { ODAI, hardText } from './odai.js';
+import { makeTopic, fillTopic } from './games.js';
 import { CPUS } from './cpus.js';
 
 export const SUITS = ['S', 'H', 'D', 'C'];
@@ -84,8 +85,11 @@ export function odaiOf(id, g) {
   if (!d) return null;
   let t = (g?.duo && d.t2) || d.t;
   if (g?.hard) t = hardText(t);
+  // 飲みゲーのお題は、ペアがそろった瞬間に決めて pair.topics に入れてある（全員の画面で同じ）
+  const topic = d.game ? g?.pair?.topics?.[id] || null : null;
+  if (d.game) t = fillTopic(t, topic);
   const fx = g?.duo && 'fx2' in d ? d.fx2 : d.fx;
-  return { ...d, t, fx };
+  return { ...d, t, fx, topic: topic?.text || null };
 }
 
 export function makeHost(s0, pid) {
@@ -253,7 +257,10 @@ export function draw(s0, pid, index, rng = Math.random) {
   if (m >= 0) {
     const own = mine.splice(m, 1)[0];
     g.pairs++;
-    g.pair = { by: pid, from, cards: [card, own], chosen: null, picks: [], text: null, committed: false, double: false, result: null, peek: null };
+    // 飲みゲーのカードなら、ここでお題を決めておく（選ぶ前の2枚にも出る）
+    const topics = {};
+    for (const id of [card, own]) if (ODAI[id]?.game) topics[id] = makeTopic(ODAI[id].game, rng);
+    g.pair = { by: pid, from, cards: [card, own], chosen: null, picks: [], text: null, committed: false, double: false, result: null, peek: null, topics };
     g.step = 'choose';
     g.lastDraw = { by: pid, from, card, matched: true, seq: g.seq };
     log(s, `${nameOf(s, pid)}が${nameOf(s, from)}から引いて、${RANK_LABEL[rankOf(card)]}のペア成立`);
