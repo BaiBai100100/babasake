@@ -85,6 +85,7 @@ if (ui.code) ui.screen = 'join';
 // ---------- 小物 ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const S = () => ui.state;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const nm = (pid) => esc(L.nameOf(S(), pid));
 const kindOf = (s = S()) => s?.kind || 'baba';
 const isKioku = (s = S()) => kindOf(s) === 'kioku';
@@ -274,8 +275,10 @@ function afterStateChange(prev, s) {
       ui.newCard = d.card;
       setTimeout(() => { ui.newCard = null; render(); }, 2500);
       toast(d.card === 'JK' ? 'JOKERを引いた…顔に出さないで' : `${label} を引いた（そろわず）`);
+      if (d.card === 'JK') FX.playJoker('got');
     } else if (d.from === me.id) {
       toast(d.card === 'JK' ? 'JOKERを引かれた！ ババが移った' : `${label} を引かれた`);
+      if (d.card === 'JK') FX.playJoker('gone');
     } else if (!d.matched) {
       toast(`${L.nameOf(s, d.by)}が${L.nameOf(s, d.from)}から引いた`, 1800);
     }
@@ -585,6 +588,7 @@ function viewHome() {
         <button class="btn" data-act="join-code">参加</button>
       </div>
     </section>
+    ${isStandalone() ? '' : `<p class="a2hs">${ICON.share}ホーム画面に追加すると、アプリのように全画面で遊べます<small>${/iPhone|iPad|iPod/.test(navigator.userAgent) ? 'Safari の共有ボタン →「ホーム画面に追加」' : 'ブラウザのメニュー →「ホーム画面に追加」／「アプリをインストール」'}</small></p>`}
     <footer class="fine">市販のカードゲームをもとにした非公式のファンメイドです。お題はすべてオリジナル。<br>お酒は20歳になってから。一気飲みはしない。苦手な人はソフトドリンクで。</footer>
   </main>`;
 }

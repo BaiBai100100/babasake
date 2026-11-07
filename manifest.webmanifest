@@ -1,0 +1,32 @@
+{
+  "name": "NOMIKAI CARDS（飲み会カードゲーム集）",
+  "short_name": "NOMIKAI",
+  "description": "飲み会カードゲーム集（非公式）。みんな自分のスマホで参加。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7EFE3",
+  "theme_color": "#F7EFE3",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -751,3 +751,24 @@ body.fx-shake-strong .game { animation: fx-shake-strong 0.42s linear; }
 @keyframes stamp-veil { 0% { background: rgba(247, 239, 227, 0); } 20% { background: rgba(247, 239, 227, 0.55); } 80% { background: rgba(247, 239, 227, 0.55); } 100% { background: rgba(247, 239, 227, 0); } }
 @keyframes stamp-spin { from { transform: rotate(0deg); opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } to { transform: rotate(40deg); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .fx-stamp::before { animation: none; opacity: 0; } .fx-stamp .st { animation: stamp-out 0.28s ease-in 1.2s forwards; } }
+
+/* ---------- ホーム画面に追加の案内 ---------- */
+.a2hs { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 6px; margin: 4px auto 0; max-width: 420px; padding: 8px 14px; border: 2px dashed var(--ink-2); border-radius: 14px; font-size: 12.5px; font-weight: 900; text-align: center; word-break: auto-phrase; }
+.a2hs svg { width: 16px; height: 16px; }
+.a2hs small { flex-basis: 100%; font-weight: 700; color: var(--ink-2); }
+
+/* ---------- ババ酒：JOKERを引いた（ドキッ）／引かれた（ホッ） ---------- */
+.fx-joker { position: absolute; inset: 0; display: grid; place-items: center; animation: jk-veil 1.7s ease both; }
+.fx-joker.got { --veil: rgba(27, 26, 34, 0.5); --accent: var(--pink); }
+.fx-joker.gone { --veil: rgba(28, 60, 194, 0.22); --accent: var(--blue); }
+.jk-panel { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 26px 12px; border: 3px solid var(--ink); border-radius: 20px; background: var(--paper-2); box-shadow: 7px 7px 0 var(--accent); animation: jk-pop 1.7s ease both; }
+.fx-joker .jk-card { width: 84px; aspect-ratio: 5 / 7; border: 3px solid var(--ink); border-radius: 12px; overflow: hidden; background: var(--paper-2); }
+.fx-joker .jk-card img { width: 100%; height: 100%; object-fit: cover; }
+.fx-joker b { font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 1.1; color: var(--ink); text-shadow: 2px 2px 0 var(--accent); }
+.fx-joker.got .jk-card { animation: jk-beat 0.75s ease-in-out 2 both; }
+.fx-joker.gone .jk-card { animation: jk-fly 1.1s cubic-bezier(0.5, 0, 0.75, 0) 0.25s both; }
+@keyframes jk-veil { 0%, 100% { background: transparent; } 15%, 75% { background: var(--veil); } }
+@keyframes jk-pop { 0% { opacity: 0; transform: scale(0.7) rotate(-4deg); } 14% { opacity: 1; transform: scale(1.04) rotate(-4deg); } 22%, 78% { opacity: 1; transform: scale(1) rotate(-4deg); } 100% { opacity: 0; transform: scale(0.96) rotate(-4deg); } }
+@keyframes jk-beat { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.14); } 30% { transform: scale(1); } 45% { transform: scale(1.08); } }
+@keyframes jk-fly { 0% { transform: none; opacity: 1; } 100% { transform: translate(120px, -260px) rotate(40deg) scale(0.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .fx-joker .jk-card, .jk-panel { animation: none; } }

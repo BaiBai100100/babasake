@@ -236,6 +236,19 @@ function cheer(ctx, t, out) {
 }
 export const SOUNDS = { clink, fizz, gulp, puhaa, pop, drumroll, fanfare, cheer, buzz };
 
+// ババ酒：JOKERを引いた（ドキッ）／引かれた（ホッ）。自分の画面だけに出す。音なし・短め
+export function playJoker(kind) {
+  const root = ensureLayer();
+  root.querySelector('.fx-joker')?.remove();
+  const el = document.createElement('div');
+  el.className = `fx-joker ${kind === 'gone' ? 'gone' : 'got'}`;
+  el.innerHTML = `<div class="jk-panel"><div class="jk-card"><img src="img/joker.webp" alt=""></div><b>${kind === 'gone' ? 'ホッ…' : 'ドキッ…'}</b></div>`;
+  root.appendChild(el);
+  // 音は出さない（まわりに聞こえると、だれがJOKERを持ったかバレる）。振動も手に伝わる程度に短く
+  if (kind !== 'gone') vibrate([40, 90, 40]);
+  setTimeout(() => el.remove(), 1700);
+}
+
 // でかいハンコ（トークトライアルの「見破った！」「ハズレ！」「ミッション達成！」など）。1.5秒で消える
 export const STAMP_MS = 1500;
 export function playStamp({ text, sub = '', tone = 'pink', sounds = [] } = {}) {

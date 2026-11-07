@@ -26,6 +26,7 @@
 | `fx.js` | 飲む演出の画面・効果音（Web Audio で合成）・振動 |
 | `net.js` | MQTT 通信 |
 | `vendor/` | mqtt.js・qrcode-generator（どちらもMIT） |
+| `manifest.webmanifest` / `icons/` | ホーム画面に追加したときの名前・全画面表示・アイコン（PNG。iPhone は webp のアイコンを使えない） |
 
 ## テスト
 ```
@@ -44,4 +45,5 @@ node test/talk-e2e.mjs http://localhost:8765/ # トークトライアル：3台�
 node test/custom-e2e.mjs http://localhost:8765/ # マイお題：追加・削除・当てはまり型（貯金）と実行型
 node test/tally.mjs http://localhost:8765/ # 通算成績：ババ酒の通算負け数、トークトライアルのテーマ引き直し
 node test/stamp.mjs http://localhost:8765/ # トークトライアルのハンコ演出（ハズレ・見破った・達成）と、そのあとの飲む演出
+node test/joker.mjs http://localhost:8765/ # ババ酒のJOKER演出（ドキッ／ホッ）と、ホーム画面に追加（manifest・PNGアイコン）
 ```
