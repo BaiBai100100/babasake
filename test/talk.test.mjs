@@ -100,3 +100,13 @@ test('テーマの引き直し：何も起きていない間だけ、別のテ�
   s = T.accuse(s, 'p0', 'p1', g.options.p1.find((x) => x !== g.missions.p1));
   assert.throws(() => T.rerollTheme(s), /変えられません/);
 });
+
+test('途中で抜ける：残りが1人になったら逃げ切り', () => {
+  let s = T.startGame(room(3), rng(41));
+  s = T.accuse(s, 'p0', 'p1', s.game.missions.p1);
+  s = T.removeMid(s, 'p2');
+  assert.equal(s.phase, 'over');
+  assert.equal(s.game.winner, 'p0');
+  assert.equal(s.game.notice.kind, 'last');
+  assert.throws(() => T.removeMid(s, 'p1'), /少なく/);
+});

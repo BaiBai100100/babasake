@@ -105,6 +105,22 @@ export function rerollTheme(s0, rng = Math.random) {
   return s;
 }
 
+// 途中で帰った人を外す。残りが1人になったら、その人の逃げ切り
+export function removeMid(s0, pid) {
+  const s = clone(s0);
+  const g = s.game;
+  if (!g || !s.players.some((p) => p.id === pid)) fail('その人はいません');
+  if (s.players.length - 1 < MIN_PLAYERS) fail(`${MIN_PLAYERS}人より少なくなるので外せません`);
+  log(s, `${nameOf(s, pid)}が途中で抜けた`);
+  s.players = s.players.filter((p) => p.id !== pid);
+  if (s.hostId === pid) s.hostId = s.players.find((p) => !p.cpu)?.id ?? s.players[0].id;
+  if (g.step === 'talk') {
+    const left = alive(s);
+    if (left.length === 1) finish(s, left[0], 'last');
+  }
+  return s;
+}
+
 export function timeUp(s0, now = Date.now()) {
   const s = clone(s0);
   const g = s.game;

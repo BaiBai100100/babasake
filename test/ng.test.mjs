@@ -62,3 +62,14 @@ test('時間切れ・終了：いちばん言った人が出る', () => {
   assert.deepEqual(t.game.worst, []);
   assert.equal(t.game.endsAt, null);
 });
+
+test('途中で抜ける：その人のワードと回数が消え、結果にも出ない', () => {
+  let s = N.startGame(room(3), rng(51), 0);
+  s = N.callOut(s, 'p0', 'p2', s.game.words.p2, rng(1));
+  s = N.callOut(s, 'p0', 'p2', s.game.words.p2, rng(2));
+  s = N.removeMid(s, 'p2');
+  assert.ok(!('p2' in s.game.words) && !('p2' in s.game.outs));
+  assert.throws(() => N.callOut(s, 'p0', 'p2', 0), /参加していません/);
+  s = N.endRound(s);
+  assert.deepEqual(s.game.worst, []);
+});

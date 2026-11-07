@@ -78,6 +78,21 @@ export function rerollTheme(s0, rng = Math.random) {
   return s;
 }
 
+// 途中で帰った人を外す。その人のワードと回数も消す（結果に出さない）
+export function removeMid(s0, pid) {
+  const s = clone(s0);
+  const g = s.game;
+  if (!g || !s.players.some((p) => p.id === pid)) fail('その人はいません');
+  if (s.players.length - 1 < MIN_PLAYERS) fail(`${MIN_PLAYERS}人より少なくなるので外せません`);
+  log(s, `${nameOf(s, pid)}が途中で抜けた`);
+  s.players = s.players.filter((p) => p.id !== pid);
+  if (s.hostId === pid) s.hostId = s.players.find((p) => !p.cpu)?.id ?? s.players[0].id;
+  delete g.words[pid];
+  delete g.outs[pid];
+  if (g.worst) g.worst = g.worst.filter((x) => x !== pid);
+  return s;
+}
+
 function finish(s, kind) {
   const g = s.game;
   g.step = 'over';

@@ -256,3 +256,24 @@ test('ペナルティの倍数表示', () => {
 test('2人未満では始められない', () => {
   assert.throws(() => K.startGame(room(1)), /2人以上/);
 });
+
+test('途中で抜ける：その人の番なら次の人へ、カードの途中でも引く場面に戻る。2人未満にはならない', () => {
+  let s = K.startGame(room(3, 'k1'), rng(31));
+  const seats = s.players.map((p) => p.id);
+  const t0 = s.game.turn;
+  s = K.draw(s, t0);
+  assert.equal(s.game.step, 'card');
+  s = K.removeMid(s, t0);
+  assert.equal(s.players.length, 2);
+  assert.ok(!s.players.some((p) => p.id === t0));
+  assert.equal(s.game.step, 'draw');
+  assert.equal(s.game.turn, seats[(seats.indexOf(t0) + 1) % 3]);
+  assert.equal(s.game.duo, true);
+  assert.throws(() => K.removeMid(s, s.players[0].id), /少なく/);
+  // 番ではない人を外しても、番はそのまま
+  let u = K.startGame(room(4, 'k2'), rng(32));
+  const turn = u.game.turn;
+  const other = u.players.map((p) => p.id).find((pid) => pid !== turn);
+  u = K.removeMid(u, other);
+  assert.equal(u.game.turn, turn);
+});

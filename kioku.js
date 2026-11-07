@@ -237,6 +237,36 @@ function advance(s, pid) {
   return s;
 }
 
+// 途中で帰った人を外す（ホストの操作）。その人の番なら次の人へ、その人が終わらせる縛りは消す
+export function removeMid(s0, pid) {
+  const s = clone(s0);
+  const g = s.game;
+  if (s.phase !== 'play' || !g) fail('ゲーム中ではありません');
+  const seats = s.players.map((p) => p.id);
+  const i = seats.indexOf(pid);
+  if (i < 0) fail('その人はいません');
+  if (seats.length - 1 < MIN_PLAYERS) fail(`${MIN_PLAYERS}人より少なくなるので外せません`);
+  const name = nameOf(s, pid);
+  const next = seats[(i + 1) % seats.length];
+  s.players = s.players.filter((p) => p.id !== pid);
+  if (s.hostId === pid) s.hostId = s.players.find((p) => !p.cpu)?.id ?? s.players[0].id;
+  g.rules = (g.rules || []).filter((r) => r.until !== pid);
+  g.duo = s.players.length === 2;
+  if (g.turn === pid) {
+    g.turn = next;
+    if (g.step === 'card') {
+      g.card = null;
+      g.picks = [];
+      g.text = null;
+      g.timer = null;
+      g.committed = false;
+      g.step = g.pos >= g.deck.length ? 'end' : 'draw';
+    }
+  }
+  log(s, `${name}が途中で抜けた`);
+  return s;
+}
+
 export function reshuffle(s0, rng = Math.random) {
   const s = clone(s0);
   const g = s.game;

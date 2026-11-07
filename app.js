@@ -1136,7 +1136,7 @@ function viewTalk() {
     mission = `<div class="t-local"><p>ミッションは、名前をタップして本人だけがこっそり確認</p>
       <div class="pick-row">${s.players.map((p) => `<button class="pick ${g.status[p.id] === 'out' ? 'off' : ''}" data-act="tpeek-who" data-pid="${p.id}">${esc(p.name)}</button>`).join('')}</div></div>`;
   } else if (!inRoom()) {
-    mission = '<p class="hint">観戦中です。次のラウンドから参加できます。</p>';
+    mission = '';
   } else if (my === 'out') {
     mission = `<div class="t-mission out"><img src="img/t-busted.webp" alt=""><p><b>バレてしまった…</b>ミッション：${esc(T.missionText(g.missions[me.id]))}<br>あとはみんなの会話を見守ろう</p></div>`;
   } else if (ui.showMission) {
@@ -1249,6 +1249,7 @@ function viewGame() {
   const lv = drunkLevel(s);
   return `<main class="game ${isKioku(s) ? 'kioku' : isTalk(s) ? 'kioku talk' : isNg(s) ? 'kioku ng' : 'baba'} ${lv > 0 ? 'drunk' : ''}" style="--drunk:${lv.toFixed(2)}">
     ${topBar()}
+    ${!ui.local && !inRoom() ? '<p class="spectate">観戦中です。ホストがロビーに戻すと、また参加できます</p>' : ''}
     ${isKioku(s) ? viewKioku() : isTalk(s) ? viewTalk() : isNg(s) ? viewNg() : viewBaba()}
   </main>`;
 }
@@ -1349,6 +1350,12 @@ function viewSheet() {
   if (sh.type === 'accuse') body = accuseSheet();
   if (sh.type === 'achieve') body = achieveSheet();
   if (sh.type === 'peek') body = peekSheet(sh.pid);
+  if (sh.type === 'kickmid') {
+    const s = S();
+    const list = s.players.filter((p) => ui.local || p.id !== me.id);
+    body = `<h2>だれを外す？</h2><p class="hint">外した人の分は、ゲームを止めずにそのまま続けます。${isKioku(s) ? 'その人の番だったら次の人へ回ります。' : ''}</p>
+      <div class="pick-row">${list.map((p) => `<button class="pick" data-act="kick-mid" data-pid="${p.id}">${esc(p.name)}</button>`).join('')}</div>`;
+  }
   if (sh.type === 'menu') {
     const s = S();
     const logs = (isKioku(s) ? s?.game?.log?.slice(-10).reverse().map((l) => `<li>${esc(l)}</li>`) : s?.game?.log?.slice(-12).reverse().map((l) => `<li>${esc(l.m)}</li>`))?.join('') || '';
@@ -1359,6 +1366,7 @@ function viewSheet() {
         ${s && inRoom() && !isHost() ? '<button class="btn" data-act="become-host">自分がホストになる</button>' : ''}
         ${s && isHost() && s.phase === 'play' ? '<button class="btn" data-act="lobby-confirm">ゲームを中断してロビーへ</button>' : ''}
         ${s?.game && isHost() && (s.game.rule || s.game.rules?.length) ? '<button class="btn" data-act="clear-rule">縛り・ルールを全部解除</button>' : ''}
+        ${s && isHost() && s.phase === 'play' && (isKioku(s) || isChat(s)) && s.players.length > 2 ? '<button class="btn" data-act="kickmid-menu">途中で帰った人を外す</button>' : ''}
         ${s && isChat(s) && isHost() && s.game?.step === 'talk' ? `<button class="btn" data-act="tend">このラウンドを終える${isTalk(s) ? '（勝者なし）' : ''}</button>` : ''}
         <button class="btn" data-act="leave">ホーム画面に戻る</button>
       </div>
@@ -1535,6 +1543,11 @@ function handle(act, d) {
     }
     case 'move': commit((x) => L.movePlayer(x, d.pid, Number(d.d))); break;
     case 'kick': commit((x) => L.removePlayer(x, d.pid)); break;
+    case 'kickmid-menu': ui.sheet = { type: 'kickmid' }; render(); break;
+    case 'kick-mid':
+      ui.sheet = null;
+      if (confirm(`${L.nameOf(s, d.pid)}をゲームから外しますか？`)) commit((x) => (isKioku(x) ? K.removeMid(x, d.pid) : isTalk(x) ? T.removeMid(x, d.pid) : N.removeMid(x, d.pid)));
+      break;
     case 'add-cpu': commit((x) => L.addCpu(x)); break;
     case 'add-local': {
       const name = (ui.addName || '').trim().slice(0, 10);

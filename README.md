@@ -50,5 +50,6 @@ node test/stamp.mjs http://localhost:8765/ # トークトライアルのハン�
 node test/ng-e2e.mjs http://localhost:8765/ # NGワード：3台（自分のワードだけ見えない・同時押しは1回・新ワードは本人に見えない・終了と2ラウンド目）
 node test/reconnect.mjs http://localhost:8765/ # 通信が切れた・画面を消していた → 操作を止める → つながり直して追いつく（部屋の状態も巻き戻らない）
 node test/roulette.mjs http://localhost:8765/ # ババ酒の罰ゲームルーレット：2台で同じ並び・同じ結果、飲む演出はそのあと
+node test/kickmid.mjs http://localhost:8765/ # 途中で帰った人を外す：記憶（番の人なら次へ）・NGワード3台（ワードが消える・外された人は観戦）
 node test/joker.mjs http://localhost:8765/ # ババ酒のJOKER演出（ドキッ／ホッ）と、ホーム画面に追加（manifest・PNGアイコン）
 ```
