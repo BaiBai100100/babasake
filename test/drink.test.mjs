@@ -60,7 +60,7 @@ test('ババ酒：お題ごとの判定（縛りは出さない、2倍は×2）'
   assert.equal(bd('D10'), null);
   assert.equal(bd('S2'), null); // 縛り
   assert.equal(bd('C3'), null); // 効果2倍（次から）
-  assert.equal(bd('H1'), null);
+  assert.equal(bd('C4'), null); // 交換
   assert.deepEqual(bd('C11'), { kind: 'multi', water: true, mult: 1, after: false });
   assert.equal(bd('D1', {}, { double: true }).mult, 2);
   assert.equal(bd('C2', { duo: true }).kind, 'multi'); // 2人だとリバースの代わりに乾杯
@@ -79,6 +79,25 @@ test('勝負・条件つきは「飲んだ！」を押してから（after）。
   const bd = (id, g = {}) => babaDrink(id, L.odaiOf(id, g));
   for (const id of ['S1', 'S3', 'S5', 'S7', 'S9', 'S11', 'S13', 'H9', 'D5', 'D6']) assert.equal(bd(id).after, true, id);
   for (const id of ['D1', 'D2', 'D3', 'D4', 'D7', 'D8', 'D9', 'D11', 'D12', 'C11', 'C12']) assert.equal(bd(id).after, false, id);
+});
+
+test('恋愛のお題はなし。ババ酒の♥は全部「飲む」カード', () => {
+  const ROMANCE = /恋|キス|告白し|告白され|デート|モテ|結婚|好きなタイプ|ドキッ|ドキドキ|見つめ合|好きなところ|好きな人/;
+  const texts = [
+    ...[...KIOKU_CARDS, ...HARD_CARDS].flatMap((c) => [c.id, c.t, c.t2].join(' ')),
+    ...Object.entries(ODAI).map(([id, d]) => [id, d.t, d.t2].join(' ')),
+  ];
+  assert.deepEqual(texts.filter((t) => ROMANCE.test(t)), []);
+  for (let i = 1; i <= 13; i++) {
+    for (const duo of [false, true]) assert.ok(babaDrink('H' + i, L.odaiOf('H' + i, { duo })), `H${i} は飲むカード`);
+  }
+  // ♥の中でも、結果しだいのものは「飲んだ！」を押してから
+  for (const id of ['H8', 'H9', 'H10', 'H13']) assert.equal(babaDrink(id, L.odaiOf(id, {})).after, true, id);
+  for (const id of ['H1', 'H3', 'H5', 'H6', 'H11', 'H12']) assert.equal(babaDrink(id, L.odaiOf(id, {})).kind, 'multi', id);
+  // 暴露は話すお題：「飲みすぎた日の話」でも演出は出さない
+  assert.equal(kd('K2-47'), null);
+  assert.equal(kd('K2-22').kind, 'solo'); // 「乾杯」の言い方勝負は負けた1人が飲む
+  assert.equal(kd('K2-02').kind, 'multi'); // 2人に一口ずつ
 });
 
 test('全カードで例外なく判定できる', () => {

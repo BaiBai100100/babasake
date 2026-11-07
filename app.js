@@ -1,7 +1,7 @@
 // 画面と操作。ルールは logic.js（ババ酒）と kioku.js（記憶）、通信は net.js。
 import * as L from './logic.js';
 import * as K from './kioku.js';
-import { SUIT_INFO, HEART_NOTE, PENALTY_PRESETS } from './odai.js';
+import { SUIT_INFO, PENALTY_PRESETS } from './odai.js';
 import { GENRES, PENALTY_CHOICES, PENALTY_CHOICES_HARD } from './kioku-data.js';
 import { CPU_BY_KEY, cpuLine } from './cpus.js';
 import { Room, BROKERS, waitForState } from './net.js';
@@ -185,7 +185,6 @@ function bigCard(id, g, { extra = '', attrs = '', double = false, flip = null } 
     <div class="bc-top"><span class="bc-rk">${L.RANK_LABEL[L.rankOf(id)]}</span><span class="bc-st">${info.mark}</span><span class="bc-role">${info.role}</span></div>
     <p class="bc-text">${esc(def.t)}</p>
     ${double ? `<div class="x2">効果2倍：飲むなら${g?.hard ? '四口' : '二口'}、やるなら2回</div>` : ''}
-    ${s === 'H' ? `<div class="bc-note">${HEART_NOTE}</div>` : ''}
   </div>`;
 }
 
@@ -1006,7 +1005,7 @@ const RULES_BABA = `<h2>笑うババには酒来たる</h2>
 <table class="suits">
   <tr><td class="red">♦</td><td>だれがやる？</td><td>指名・全員を巻き込む</td></tr>
   <tr><td>♠</td><td>勝負とルール</td><td>じゃんけん・対決・縛り</td></tr>
-  <tr><td class="red">♥</td><td>ドキドキ</td><td>恋バナ・打ち明け話</td></tr>
+  <tr><td class="red">♥</td><td>乾杯タイム</td><td>とにかく飲む・乾杯</td></tr>
   <tr><td>♣</td><td>展開が動く</td><td>スキップ・リバース・交換・2倍</td></tr>
 </table>
 <p class="hint">ゆさぶり：自分の手札をタップすると、1枚だけ浮かせられます。CPUもときどき浮かせてきます。</p>`;
@@ -1086,11 +1085,55 @@ function render() {
 
   app.querySelectorAll('[data-scroll]').forEach((el) => { if (scrolls[el.dataset.scroll] != null) el.scrollLeft = scrolls[el.dataset.scroll]; });
   if (Math.abs(window.scrollY - winScroll) > 1) window.scrollTo(0, winScroll);
+  fitStage();
   if (focusId) {
     const el = document.getElementById(focusId);
     if (el) { el.focus({ preventScroll: true }); try { if (selStart != null) el.setSelectionRange(selStart, selStart); } catch { /* noop */ } }
   }
 }
+
+// 記憶のカード画面を、スクロールなしで1画面に収める。
+// 足りないぶんだけ絵を縮め、それでもだめなら段階的に詰める（fit1 → 絵を消す fit2 → 文字を小さく fit3）
+const ART_MIN = 72;
+function fitStage() {
+  const st = app.querySelector('.k-stage');
+  if (!st) return;
+  st.classList.remove('fit1', 'fit2', 'fit3');
+  const art = st.querySelector('.k-art');
+  if (art) { art.classList.remove('squeezed'); art.style.height = ''; }
+  // 中身の高さはレイアウト上の値（offsetHeight）で足し算する。
+  // scrollHeight や getBoundingClientRect は、めくりアニメ・泥酔ゆれの transform で大きく／小さく見えて、絵を縮めすぎる
+  const over = () => {
+    const cs = getComputedStyle(st);
+    const kids = [...st.children].filter((e) => getComputedStyle(e).display !== 'none');
+    let h = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + (parseFloat(cs.rowGap) || 0) * Math.max(0, kids.length - 1);
+    for (const e of kids) {
+      const ks = getComputedStyle(e);
+      h += e.offsetHeight + parseFloat(ks.marginTop) + parseFloat(ks.marginBottom);
+    }
+    return Math.ceil(h - st.clientHeight);
+  };
+  // 元の高さは squeezed を付ける前に読む（付けると絵が画像本来の縦横比に戻って高さが変わる）
+  const natural = art?.offsetHeight || 0;
+  // 足りなければ縮め、詰めて余ったら元の高さまで戻す
+  const squeeze = () => {
+    const cur = art?.offsetHeight;
+    if (!cur) return;
+    const h = Math.min(natural, Math.max(ART_MIN, cur - over()));
+    if (h === cur) return;
+    art.classList.add('squeezed');
+    art.style.height = `${h}px`;
+  };
+  squeeze();
+  for (const lv of ['fit1', 'fit2', 'fit3']) {
+    if (over() <= 0) return;
+    st.classList.add(lv);
+    squeeze();
+  }
+}
+// 日本語の書体は文字ごとに後から読み込まれ（新しいカードの漢字など）、そのたびに文字の高さが変わるので合わせ直す
+document.fonts?.ready.then(() => fitStage());
+document.fonts?.addEventListener?.('loadingdone', () => fitStage());
 
 // タイマーの数字だけを更新
 setInterval(() => {

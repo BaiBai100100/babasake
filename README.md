@@ -35,4 +35,6 @@ node test/toast.mjs http://localhost:8765/ # 貯金があるときの「全員�
 node test/drink.mjs http://localhost:8765/ # 飲む演出（グラスひとつ／ふたつ・効果音オフ）
 node test/drink-timing.mjs http://localhost:8765/ # ポーズ勝負：確定前は出さない・飲んだ／セーフ・2端末同期・再読込・3画面サイズ
 node test/fx-preview.mjs http://localhost:8765/ # 飲む演出のコマ送り＋音つきプレビュー動画（ffmpeg）
+node test/fit.mjs http://localhost:8765/   # 記憶のカード画面が全カード・5画面サイズでスクロールなしに収まるか
+node test/heart.mjs http://localhost:8765/ # ババ酒の♥（乾杯タイム）カードの表示
 ```

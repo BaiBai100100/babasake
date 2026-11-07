@@ -35,6 +35,8 @@ export const DRINK_OVERRIDE = {
   D5: 'solo',
   // 指名した人と腕を組んで2人で飲む
   'K2-14': 'multi',
+  // 「乾杯」の言い方を出し合う勝負：飲むのは詰まった1人
+  'K2-22': 'solo',
 };
 
 export function drinkKind(text) {
@@ -51,6 +53,7 @@ export function kiokuDrink(card, { pen = '一口飲む', foot = null, pot = 0 } 
   let kind;
   if (card.id in DRINK_OVERRIDE) kind = DRINK_OVERRIDE[card.id];
   else if (foot === 'hit') return null; // 当てはまり系は「いた！」を押したときに出す（kiokuHitDrink）
+  else if (foot === 'pass') return null; // 暴露は話すお題（「飲みすぎた日の話」も飲むわけではない）
   else kind = drinkKind(card.t.replace(/ペナルティ/g, pen));
   if (!kind) return null;
   if (card.toast) kind = 'multi';
