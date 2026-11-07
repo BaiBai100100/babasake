@@ -73,8 +73,11 @@ export class Room {
     this.onStatus(s);
   }
 
+  // つながっていないときは送らない（mqtt.js は切れている間の送信をためておき、つながった瞬間に古い状態を送ってしまう）
   publishState(state) {
-    this.client?.publish(this.topic('state'), JSON.stringify(state), { qos: 1, retain: true });
+    if (!this.client?.connected) return false;
+    this.client.publish(this.topic('state'), JSON.stringify(state), { qos: 1, retain: true });
+    return true;
   }
 
   publishLive(data) {
@@ -85,10 +88,18 @@ export class Room {
     this.client?.publish(this.topic(`raise/${pid}`), JSON.stringify({ card: card || null }), { qos: 1, retain: true });
   }
 
-  // 接続が切れていたら作り直す（スマホのスリープ復帰用）
-  nudge() {
-    if (this.client && !this.client.connected) {
-      try { this.client.reconnect(); } catch { /* noop */ }
+  // 接続が切れていたら作り直す（スマホのスリープ復帰用）。
+  // force: 長く画面を消していたあとは、つながって見えても実は切れていることがあるので作り直す
+  nudge(force = false) {
+    const c = this.client;
+    if (!c) return;
+    if (force && c.connected) {
+      this.setStatus('reconnecting');
+      try { c.end(true, {}, () => { try { c.reconnect(); } catch { /* noop */ } }); } catch { /* noop */ }
+      return;
+    }
+    if (!c.connected) {
+      try { c.reconnect(); } catch { /* noop */ }
     }
   }
 

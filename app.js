@@ -233,6 +233,7 @@ function newer(a, b) {
 let healAt = 0;
 function onRemoteState(s, retained) {
   if (!s || !s.v || !s.players || ui.local) return;
+  ui.syncUntil = 0; // 部屋の状態が1つでも届いたら、つながり直し後の待ちは終わり
   if (ui.state && !newer(s, ui.state)) {
     if (retained && newer(ui.state, s) && Date.now() - healAt > 1500) {
       healAt = Date.now();
@@ -248,6 +249,16 @@ function onRemoteState(s, retained) {
 
 function commit(fn) {
   if (!S()) return false;
+  // 切れている間・つながり直した直後（最新の状態を受け取るまで）は押せない。古い状態から作った手で、みんなの進行を巻き戻さないため
+  if (!ui.local && ui.room && (ui.net !== 'online' || Date.now() < ui.syncUntil)) {
+    // CPU・タイマーの自動の操作でも呼ばれるので、お知らせは3秒に1回まで
+    if (Date.now() - (ui.blockedAt || 0) > 3000) {
+      ui.blockedAt = Date.now();
+      toast(ui.net === 'online' ? '最新の状態を受け取っています…もう一度押してね' : '再接続中です。つながったらもう一度押してね');
+    }
+    if (ui.net !== 'online') ui.room.nudge();
+    return false;
+  }
   try {
     const next = fn(S());
     next.v = S().v + 1;
@@ -384,7 +395,12 @@ function makeRoom(code, broker) {
     onState: onRemoteState,
     onLive,
     onRaise,
-    onStatus: (st) => { ui.net = st; render(); },
+    onStatus: (st) => {
+      // つながり直したら、部屋の最新の状態（retained）が届くまで少しだけ操作を止める
+      if (st === 'online' && ui.net !== 'online') ui.syncUntil = Date.now() + 2500;
+      ui.net = st;
+      render();
+    },
   });
 }
 
@@ -393,6 +409,7 @@ function enterRoom(room) {
   ui.code = room.code;
   ui.broker = room.broker;
   ui.net = 'online';
+  ui.syncUntil = 0; // 入った時点の状態は手元にある
   ui.screen = 'room';
   store.set('room', `${room.code}:${room.broker}`);
   if (me.name) store.set('name', me.name);
@@ -506,6 +523,7 @@ function scheduleCpu() {
   if (cpuTimer) return;
   const s = S();
   if (!s || s.phase !== 'play' || !isHost()) return;
+  if (!ui.local && ui.net !== 'online') return;
   if (!isKioku(s)) maybeCpuRaise(s);
   const a = actorOf(s);
   if (!a || !isCpu(a) || humanStepForCpu()) return;
@@ -1612,9 +1630,13 @@ function handle(act, d) {
   }
 }
 
+let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
   if (document.visibilityState === 'visible') {
-    ui.room?.nudge();
+    // 5秒以上消えていたら、つながって見えても作り直す（iPhone はスリープ中に通信が止まり、気づくまで20秒以上かかる）
+    ui.room?.nudge(hiddenAt > 0 && Date.now() - hiddenAt > 5000);
+    hiddenAt = 0;
     if (S()?.phase === 'play') keepAwake(true);
     scheduleCpu();
   }

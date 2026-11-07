@@ -48,5 +48,6 @@ node test/custom-e2e.mjs http://localhost:8765/ # マイお題：追加・削除
 node test/tally.mjs http://localhost:8765/ # 通算成績：ババ酒の通算負け数、トークトライアルのテーマ引き直し
 node test/stamp.mjs http://localhost:8765/ # トークトライアルのハンコ演出（ハズレ・見破った・達成）と、そのあとの飲む演出
 node test/ng-e2e.mjs http://localhost:8765/ # NGワード：3台（自分のワードだけ見えない・同時押しは1回・新ワードは本人に見えない・終了と2ラウンド目）
+node test/reconnect.mjs http://localhost:8765/ # 通信が切れた・画面を消していた → 操作を止める → つながり直して追いつく（部屋の状態も巻き戻らない）
 node test/joker.mjs http://localhost:8765/ # ババ酒のJOKER演出（ドキッ／ホッ）と、ホーム画面に追加（manifest・PNGアイコン）
 ```
